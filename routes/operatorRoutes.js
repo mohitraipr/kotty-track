@@ -985,6 +985,9 @@ const {
   fetchLotSizeEventSums,
   getDepartmentStatuses,
   filterByDept,
+  buildPicSizeRows,
+  buildPicSizeWorkbook,
+  istDateString,
 } = require("../utils/picSizeReport");
 
 
@@ -1284,307 +1287,23 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
     // Default to last 7 days if no dates specified (for faster initial load)
     let { startDate = "", endDate = "" } = req.query;
     if (!startDate || !endDate) {
-      const today = new Date();
-      const weekAgo = new Date(today);
+      const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
-      endDate = today.toISOString().split('T')[0];
-      startDate = weekAgo.toISOString().split('T')[0];
+      endDate = istDateString();
+      startDate = istDateString(weekAgo);
     }
 
-    // 1) Build filters for main lots query (same logic as pic-report)
-    let dateWhere = "";
-    let dateParams = [];
-
-    if (startDate && endDate) {
-      if (dateFilter === "createdAt") {
-        dateWhere = " AND DATE(cl.created_at) BETWEEN ? AND ? ";
-        dateParams.push(startDate, endDate);
-      } else if (dateFilter === "assignedOn") {
-        const evtTable = {
-          stitching:  'stitching_events',
-          assembly:   'jeans_assembly_events',
-          washing:    'washing_events',
-          washing_in: 'washing_in_events',
-          finishing:  'finishing_events',
-        }[department];
-        if (evtTable) {
-          dateWhere = `
-            AND EXISTS (
-              SELECT 1
-                FROM ${evtTable} e
-               WHERE e.cutting_lot_id = cl.id
-                 AND e.event_type = 'approve'
-                 AND DATE(e.created_at) BETWEEN ? AND ?
-            )
-          `;
-          dateParams.push(startDate, endDate);
-        }
-      }
-    }
-
-    let lotTypeClause = "";
-    if (lotType === "denim") {
-      lotTypeClause = `
-        AND (
-          cl.flow_type = 'denim'
-          OR (cl.flow_type IS NULL AND u.is_denim_cutter = 1)
-          OR (cl.flow_type IS NULL AND u.is_denim_cutter IS NULL AND (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%'))
-        )
-      `;
-    } else if (lotType === "hosiery") {
-      lotTypeClause = `
-        AND (
-          cl.flow_type = 'hosiery'
-          OR (cl.flow_type IS NULL AND u.is_denim_cutter = 0)
-          OR (cl.flow_type IS NULL AND u.is_denim_cutter IS NULL AND cl.lot_no NOT LIKE 'AK%' AND cl.lot_no NOT LIKE 'UM%')
-        )
-      `;
-    }
-
-    // 2) Fetch lot/size rows (with LIMIT for performance)
-    const baseQuery = `
-      SELECT cl.lot_no, cl.manual_lot_number, cl.sku, cl.fabric_type, cls.size_label, cls.total_pieces, cl.created_at, cl.remark, cl.flow_type,
-             u.username AS created_by, u.is_denim_cutter
-        FROM cutting_lots cl
-        JOIN cutting_lot_sizes cls ON cls.cutting_lot_id = cl.id
-        JOIN users u ON cl.user_id = u.id
-       WHERE 1=1
-         ${lotTypeClause}
-         ${dateWhere}
-       ORDER BY cl.created_at DESC
-       LIMIT 5000
-    `;
-    const [rows] = await pool.query(baseQuery, dateParams);
-
-    const lotNos = [...new Set(rows.map(r => r.lot_no))];
-    if (!lotNos.length) {
-      if (download === "1") {
-        return res.status(200).send("No data to download");
-      } else {
-        return res.render("operatorSizeReport", {
-          filters: { lotType, department, status, dateFilter, startDate, endDate },
-          rows: []
-        });
-      }
-    }
-
-    // 3) Per-(lot, size) completed pieces by stage — sourced from *_event_sizes
-    //    (truth source; the legacy *_data_sizes tables are only partial).
-    const sizeEventSums = await fetchLotSizeEventSums(lotNos);
-
-    // Query for dispatched quantities and destinations
-    const [dispatchRows] = await pool.query(`
-      SELECT fdp.lot_no, fdp.size_label,
-             COALESCE(SUM(fdp.quantity),0) AS dispatchedQty,
-             GROUP_CONCAT(DISTINCT fdp.destination ORDER BY fdp.sent_at DESC SEPARATOR ', ') AS destinations
-        FROM finishing_dispatches fdp
-       WHERE fdp.lot_no IN (?)
-       GROUP BY fdp.lot_no, fdp.size_label
-    `, [lotNos]);
-
-    const dispatchMap = {};
-    for (const d of dispatchRows) {
-      const key = `${d.lot_no}|${d.size_label}`;
-      dispatchMap[key] = { dispatchedQty: parseFloat(d.dispatchedQty) || 0, destinations: d.destinations || '' };
-    }
-
-    const sizeSumsMap = {};
-    for (const r of rows) {
-      const key = `${r.lot_no}|${r.size_label}`;
-      const fromEvents = sizeEventSums[key];
-      sizeSumsMap[key] = fromEvents
-        ? { ...fromEvents }
-        : { stitchedQty:0, assembledQty:0, washedQty:0, washingInQty:0, finishedQty:0 };
-    }
-
-    // 4) Latest approve event per lot+stage (same shape as pic-report).
-    const { stitchMap, asmMap, washMap, winMap, finMap } = await fetchLotEventAggregates(lotNos);
-
-    // 4a) Rewash totals per lot (lot-level aggregate; same as pic-report)
-    const [rewashRows2] = await pool.query(
-      `SELECT lot_no,
-              SUM(total_requested) AS requestedQty,
-              SUM(CASE WHEN status='pending'   THEN total_requested ELSE 0 END) AS pendingQty,
-              SUM(CASE WHEN status='completed' THEN total_requested ELSE 0 END) AS completedQty
-         FROM rewash_requests
-        WHERE lot_no IN (?)
-        GROUP BY lot_no`,
-      [lotNos]
-    );
-    const rewashMap = {};
-    for (const r of rewashRows2) {
-      rewashMap[r.lot_no] = {
-        requested: parseFloat(r.requestedQty)  || 0,
-        pending:   parseFloat(r.pendingQty)    || 0,
-        completed: parseFloat(r.completedQty)  || 0
-      };
-    }
-
-    // 4b) Rejects per lot+size+stage
-    const [sizeRejectRows] = await pool.query(
-      `SELECT rd.lot_no, rd.stage, rds.size_label,
-              COALESCE(SUM(rds.pieces),0) AS pieces,
-              GROUP_CONCAT(DISTINCT NULLIF(rd.reason,'') ORDER BY rd.reason SEPARATOR '; ') AS reasons
-         FROM reject_data rd
-         JOIN reject_data_sizes rds ON rds.reject_data_id = rd.id
-        WHERE rd.lot_no IN (?)
-        GROUP BY rd.lot_no, rd.stage, rds.size_label`,
-      [lotNos]
-    );
-    const rejectSizeMap = {}; // key = lot|size, val = {stitching:{pieces,reasons}, ...}
-    for (const r of sizeRejectRows) {
-      const key = `${r.lot_no}|${r.size_label}`;
-      if (!rejectSizeMap[key]) rejectSizeMap[key] = {};
-      rejectSizeMap[key][r.stage] = {
-        pieces: parseFloat(r.pieces) || 0,
-        reasons: r.reasons || ''
-      };
-    }
-
-    // 5) Build final data
-    const finalData = [];
-    for (const row of rows) {
-      const lotNo = row.lot_no;
-      const sizeLabel = row.size_label;
-      const totalCut = parseFloat(row.total_pieces) || 0;
-      const denim = isDenimLot(row);
-
-      const sums = sizeSumsMap[`${lotNo}|${sizeLabel}`] || {};
-      const stitchedQty  = sums.stitchedQty  || 0;
-      const assembledQty = sums.assembledQty || 0;
-      const washedQty    = sums.washedQty    || 0;
-      const washingInQty = sums.washingInQty || 0;
-      const finishedQty  = sums.finishedQty  || 0;
-      // per-size approved (In) + dispatched (finishing's "next approval")
-      const approvedSums = {
-        stitchApproved: sums.stitchApproved || 0,
-        assemblyApproved: sums.assemblyApproved || 0,
-        washingApproved: sums.washingApproved || 0,
-        washInApproved: sums.washInApproved || 0,
-        finishingApproved: sums.finishingApproved || 0,
-      };
-      const dispatch = dispatchMap[`${lotNo}|${sizeLabel}`] || {};
-      const dispatchedQty = dispatch.dispatchedQty || 0;
-
-      const stAssign  = stitchMap[lotNo] || null;
-      const asmAssign = asmMap[lotNo]    || null;
-      const washAssign= washMap[lotNo]   || null;
-      const wInAssign = winMap[lotNo]    || null;
-      const finAssign = finMap[lotNo]    || null;
-
-      const statuses = getDepartmentStatuses({
-        isDenim: denim,
-        totalCut,
-        stitchedQty,
-        assembledQty,
-        washedQty,
-        washingInQty,
-        finishedQty,
-        stAssign,
-        asmAssign,
-        washAssign,
-        washInAssign: wInAssign,
-        finAssign,
-        ...approvedSums,
-        dispatched: dispatchedQty
-      });
-
-      const deptResult = filterByDept({
-        department,
-        isDenim: denim,
-        stitchingStatus: statuses.stitchingStatus,
-        assemblyStatus: statuses.assemblyStatus,
-        washingStatus: statuses.washingStatus,
-        washingInStatus: statuses.washingInStatus,
-        finishingStatus: statuses.finishingStatus
-      });
-      if (!deptResult.showRow) continue;
-
-      const actualStatus = deptResult.actualStatus.toLowerCase();
-      if (status !== "all") {
-        if (status === "not_assigned") {
-          if (!actualStatus.startsWith("in ")) continue;
-        } else {
-          const want = status.toLowerCase();
-          if (want === "inline" && actualStatus.includes("in-line")) {
-          } else if (!actualStatus.includes(want)) {
-            continue;
-          }
-        }
-      }
-
-      const lotForBuilder = {
-        lot_no: lotNo,
-        manual_lot_number: row.manual_lot_number,
-        sku: row.sku,
-        fabric_type: row.fabric_type,
-        remark: row.remark,
-        created_at: row.created_at
-      };
-      const enriched = buildEnhancedRow({
-        lot: lotForBuilder,
-        isDenim: denim,
-        totalCut, // per-size cut from cutting_lot_sizes — correct baseline
-        sums: { stitchedQty, assembledQty, washedQty, washingInQty, finishedQty },
-        assigns: { stAssign, asmAssign, washAssign, washInAssign: wInAssign, finAssign },
-        approved: approvedSums,
-        dispatched: dispatchedQty,
-        rewash: rewashMap[lotNo] || { requested:0, pending:0, completed:0 },
-        rejects: rejectSizeMap[`${lotNo}|${sizeLabel}`] || {}
-      });
-      // size-specific overrides
-      enriched.size = sizeLabel;
-      enriched.sku_size = `${row.sku}_${sizeLabel}`;
-      enriched.dispatchedQty = dispatchedQty;
-      enriched.destinations  = dispatch.destinations  || '';
-
-      finalData.push(enriched);
-    }
+    // Rows come from the shared builder (utils/picSizeReport.js) — identical
+    // filters, plus the duplicate-size-row dedup the old inline copy lacked.
+    const finalData = await buildPicSizeRows({
+      lotType, department, status, dateFilter, startDate, endDate
+    });
 
     if (download === "1") {
-      const workbook = new ExcelJS.Workbook();
-      workbook.creator = "PIC Size Report v2";
-
-      const sheet = workbook.addWorksheet("PIC-Size-Report");
-
-      // Size-aware column set: same shape as PIC v2 + Size + dispatch columns
-      const sizeCols = [
-        { header: 'Lot No',              key: 'lotNo',             width: 14 },
-        { header: 'Manual Lot No',       key: 'externalLotNo',     width: 14 },
-        { header: 'Fabric Type',         key: 'fabricType',        width: 14 },
-        { header: 'SKU',                 key: 'sku',               width: 22 },
-        { header: 'Size',                key: 'size',              width: 8  },
-        { header: 'SKU_Size',            key: 'sku_size',          width: 24 },
-        { header: 'Lot Type',            key: 'lotType',           width: 9  },
-        { header: 'Created At',          key: 'createdAt',         width: 12 },
-        { header: 'Days Since Created',  key: 'daysSinceCreated',  width: 10 },
-        { header: 'Lot Total Cut',       key: 'totalCut',          width: 10 },
-        { header: 'Current Stage',       key: 'currentStage',      width: 14 },
-        { header: 'Current Pending Qty', key: 'currentPendingQty', width: 12 },
-        { header: 'Days In Stage',       key: 'daysInStage',       width: 10 },
-        { header: 'Remark',              key: 'remark',            width: 26 }
-      ];
-      const stageColKeys = new Set([
-        'stitchOp','stitchAssignedOn','stitchApprovedOn','stitchInQty','stitchOutQty','stitchPendingQty','stitchStatus','stitchInline',
-        'assemblyOp','assemblyAssignedOn','assemblyApprovedOn','assemblyInQty','assemblyOutQty','assemblyPendingQty','assemblyStatus','assemblyInline',
-        'washingOp','washingAssignedOn','washingApprovedOn','washingInQty_in','washingOutQty','washingPendingQty','washingStatus','washingInline',
-        'washInOp','washInAssignedOn','washInApprovedOn','washInInQty','washInOutQty','washInPendingQty','washInStatus','washInInline',
-        'rewashRequestedQty','rewashPendingQty','rewashCompletedQty',
-        'finishingOp','finishingAssignedOn','finishingApprovedOn','finishingInQty','finishingOutQty','finishingPendingQty','finishingStatus',
-        'stitchRejectQty','stitchRejectReasons','washInRejectQty','washInRejectReasons','finishingRejectQty','finishingRejectReasons','totalRejectQty'
-      ]);
-      for (const c of PIC_REPORT_V2_COLUMNS) {
-        if (stageColKeys.has(c.key)) sizeCols.push(c);
+      if (!finalData.length) {
+        return res.status(200).send("No data to download");
       }
-      sizeCols.push({ header: 'Dispatched Qty',       key: 'dispatchedQty', width: 12 });
-      sizeCols.push({ header: 'Dispatch Destination', key: 'destinations',  width: 26 });
-      sheet.columns = sizeCols;
-
-      for (const r of finalData) sheet.addRow(r);
-
-      sheet.getRow(1).font = { bold: true };
-      sheet.views = [{ state: 'frozen', xSplit: 6, ySplit: 1 }];
-
+      const workbook = buildPicSizeWorkbook(finalData);
       res.setHeader(
         "Content-Type",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -1597,7 +1316,7 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
       res.end();
     } else {
       return res.render("operatorSizeReport", {
-        user: req.user,
+        user: req.session.user,
         filters: { lotType, department, status, dateFilter, startDate, endDate },
         rows: finalData
       });

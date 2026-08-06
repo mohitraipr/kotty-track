@@ -1,7 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 // Requires config/db at import; NODE_ENV=test (set by `npm test`) skips the DB connect.
-const { buildEnhancedRow } = require('../utils/picSizeReport.js');
+const { buildEnhancedRow, deriveLotStyle, fnv1a } = require('../utils/picSizeReport.js');
+const { deriveStyle } = require('../utils/easyecomAnalytics.js');
 
 // Regression guard for the approved/completed stage model (PR #479):
 //   In      = this stage's APPROVED
@@ -84,4 +85,46 @@ test('inline/pending never go negative (corrupt data: completed > approved)', ()
   });
   assert.strictEqual(row.stitchInline, 0);       // max(0, 80 - 100)
   assert.ok(row.stitchPendingQty >= 0);
+});
+
+// ── deriveLotStyle: decorated cutting-lot skus must still match their style ──
+// Root cause of the "lot A639 missing from the style's PIC report" bug: the
+// cutter saved the sku as "CCLADIESJEANS20/CC37"; deriveStyle() left the /CC37
+// decoration in place so the exact style match dropped every row of the lot.
+
+test('deriveLotStyle strips a /fabric-code decoration', () => {
+  assert.strictEqual(deriveLotStyle('CCLADIESJEANS20/CC37'), 'CCLADIESJEANS20');
+  assert.strictEqual(deriveLotStyle('KTTLADIESJEANS817/3236'), 'KTTLADIESJEANS817');
+  assert.strictEqual(deriveLotStyle('KTTMANSJEANS229/224'), 'KTTMANSJEANS229');
+});
+
+test('deriveLotStyle trims stray whitespace', () => {
+  assert.strictEqual(deriveLotStyle('KOTTYLADIESJEANS823 '), 'KOTTYLADIESJEANS823');
+  assert.strictEqual(deriveLotStyle('  ktttop374  '), 'KTTTOP374');
+});
+
+test('deriveLotStyle matches deriveStyle for plain and size-suffixed skus', () => {
+  for (const sku of ['CCLADIESJEANS20', 'KTTLADIESJEANS823M', 'KTTLADIESJEANS1003_3XL', 'KTTMENSJEANS381_28']) {
+    assert.strictEqual(deriveLotStyle(sku), deriveStyle(sku));
+  }
+});
+
+test('deriveLotStyle still distinguishes genuinely different styles (KTT677 vs KTT6770)', () => {
+  assert.notStrictEqual(deriveLotStyle('KTT6770'), 'KTT677');
+  assert.strictEqual(deriveLotStyle('KTT6770/12'), 'KTT6770');
+});
+
+test('deriveLotStyle handles empty/nullish input', () => {
+  assert.strictEqual(deriveLotStyle(''), '');
+  assert.strictEqual(deriveLotStyle(null), '');
+  assert.strictEqual(deriveLotStyle(undefined), '');
+});
+
+// Cache keys used to be `len-first-last`, which collides for different lot
+// sets sharing length and endpoints; the full-list hash must not.
+test('fnv1a distinguishes lot lists with same length, first and last', () => {
+  const a = ['ak100', 'ak250', 'ak999'].join(',');
+  const b = ['ak100', 'ak251', 'ak999'].join(',');
+  assert.notStrictEqual(fnv1a(a), fnv1a(b));
+  assert.strictEqual(fnv1a(a), fnv1a(a)); // stable
 });
