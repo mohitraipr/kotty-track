@@ -5,6 +5,8 @@ const upload = multer(); // This will parse multipart/form-data
 const { pool } = require('../config/db');
 const { isAuthenticated, isOperator } = require('../middlewares/auth');
 const { allowAdhocCuttingEntry } = require('../utils/storeSettings');
+const { assertManualDateNotFuture } = require('../utils/stageEvents');
+const { writeLotAudit } = require('../utils/lotAudit');
 
 // simple in-memory cache for cutting masters
 const masterCache = { data: null, expires: 0 };
@@ -588,15 +590,41 @@ router.post('/editcuttinglots/update', isAuthenticated, isOperator, upload.none(
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
+
+    // Scope to the manager whose lot this is (mirrors the GET edit-form scoping —
+    // previously the UPDATE was scoped by lotId alone, so any operator could hit
+    // any lot id). Also grabs lot_no for the size-rename cascades and the prior
+    // manual date for the audit trail.
+    const [[lotRow]] = await conn.query(
+      `SELECT lot_no, manual_cutting_date FROM cutting_lots WHERE id = ? AND user_id = ? FOR UPDATE`,
+      [lotId, managerId]
+    );
+    if (!lotRow) throw new Error('Lot not found for this manager.');
+    const lotNo = lotRow.lot_no;
+
+    if (manualCuttingDate) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(manualCuttingDate)) {
+        throw new Error('Invalid manual cutting date (use YYYY-MM-DD)');
+      }
+      await assertManualDateNotFuture(conn, manualCuttingDate);
+    }
+
     await conn.query(
-      `UPDATE cutting_lots SET sku = ?, fabric_type = ?, remark = ?, manual_lot_number = ?, manual_cutting_date = ? WHERE id = ?`,
-      [sku, fabric_type, remark, manualLotNumber, manualCuttingDate, lotId]
+      `UPDATE cutting_lots SET sku = ?, fabric_type = ?, remark = ?, manual_lot_number = ?, manual_cutting_date = ? WHERE id = ? AND user_id = ?`,
+      [sku, fabric_type, remark, manualLotNumber, manualCuttingDate, lotId, managerId]
     );
 
-    // Need the lot_no to cascade size renames into the legacy data tables.
-    const [[lotRow]] = await conn.query(`SELECT lot_no FROM cutting_lots WHERE id = ? FOR UPDATE`, [lotId]);
-    if (!lotRow) throw new Error('Lot not found.');
-    const lotNo = lotRow.lot_no;
+    const prevManualDate = lotRow.manual_cutting_date
+      ? new Date(lotRow.manual_cutting_date).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+      : null;
+    if (manualCuttingDate !== prevManualDate) {
+      await writeLotAudit(conn, {
+        cutting_lot_id: lotId, lot_no: lotNo,
+        action: 'manual_date',
+        detail: { stage: 'cutting', manual_cutting_date: manualCuttingDate, previous: prevManualDate, source: 'edit' },
+        performed_by: req.session.user.id, performed_by_name: req.session.user.username,
+      });
+    }
 
     // Validate the resulting labels: non-empty, within length, and unique within the lot
     // (no unique constraint exists on cutting_lot_sizes, but allowing two sizes to share

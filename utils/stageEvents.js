@@ -258,11 +258,17 @@ async function getOpenApprovals(conn, stage, cuttingLotId, operatorId = null) {
  *   - sizes:           [{ size_label, pieces }] — must sum to total
  *   - parentEventId:   required for complete/reject, must be NULL for approve
  *   - remark:          optional per-event note
+ *   - manualDate:      optional 'YYYY-MM-DD' — the actual floor date of the
+ *                      action when it differs from today. Shadow value only:
+ *                      created_at stays server time. Callers must validate
+ *                      via resolveManualDate() first (once per request, since
+ *                      a handler's paired recordEvent calls share one date).
  *
  * Returns the new event id.
  */
 async function recordEvent(conn, {
   stage, cuttingLotId, eventType, operatorId, sizes, parentEventId = null, remark = null,
+  manualDate = null,
 }) {
   const { events, eventSizes } = tablesFor(stage);
 
@@ -305,10 +311,10 @@ async function recordEvent(conn, {
   const [result] = await conn.query(
     `
       INSERT INTO ${events}
-        (cutting_lot_id, event_type, parent_event_id, pieces, operator_id, remark)
-      VALUES (?, ?, ?, ?, ?, ?)
+        (cutting_lot_id, event_type, parent_event_id, pieces, operator_id, remark, manual_date)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
-    [cuttingLotId, eventType, parentEventId, totalPieces, operatorId, remark]
+    [cuttingLotId, eventType, parentEventId, totalPieces, operatorId, remark, manualDate]
   );
   const eventId = result.insertId;
 
@@ -325,6 +331,88 @@ async function recordEvent(conn, {
   return eventId;
 }
 
+/**
+ * Throw if `raw` ('YYYY-MM-DD') is after today. Date comparisons run in SQL so
+ * "today" is the DB session's IST clock, not the Node process timezone.
+ */
+async function assertManualDateNotFuture(conn, raw) {
+  const [[f]] = await conn.query('SELECT (? > CURDATE()) AS is_future', [raw]);
+  if (f && Number(f.is_future)) {
+    throw new Error('Manual date cannot be in the future');
+  }
+}
+
+/**
+ * Validate a user-supplied manual date for a stage event. Returns null when the
+ * field was left blank, or the normalized 'YYYY-MM-DD' string when valid.
+ * Throws an Error with a user-facing message on violation.
+ *
+ * Bounds (whole days, matching manual_cutting_date's DATE granularity):
+ *   - not in the future (IST via the DB session)
+ *   - complete/inline-reject (parentEventId set): not before the parent approve
+ *     event's effective date
+ *   - approve/upstream-reject: not before the nearest upstream stage's earliest
+ *     effective date. The walk uses the full denim chain regardless of flow
+ *     type — a hosiery lot simply has empty assembly/washing tables and falls
+ *     through — and terminates at cutting_lots, so a date is never rejected
+ *     just because upstream stages have no events (pre-events legacy lots).
+ *     MIN (stage start), not MAX: partial batches legitimately overlap.
+ */
+async function resolveManualDate(conn, { stage, cuttingLotId, manualDate, parentEventId = null }) {
+  const raw = (manualDate == null ? '' : String(manualDate)).trim();
+  if (!raw) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    throw new Error('Invalid manual date (use YYYY-MM-DD)');
+  }
+
+  await assertManualDateNotFuture(conn, raw);
+
+  if (parentEventId != null) {
+    const { events } = tablesFor(stage);
+    const [[p]] = await conn.query(
+      `SELECT (? < COALESCE(manual_date, DATE(created_at))) AS too_early,
+              DATE_FORMAT(COALESCE(manual_date, DATE(created_at)), '%d-%m-%Y') AS eff
+         FROM ${events} WHERE id = ?`,
+      [raw, parentEventId]
+    );
+    if (p && Number(p.too_early)) {
+      throw new Error(`Manual date is before this batch was taken (${p.eff})`);
+    }
+    return raw;
+  }
+
+  const idx = STAGES.indexOf(stage);
+  if (idx === -1) throw new Error(`Unknown stage: ${stage}`);
+  for (let i = idx - 1; i >= 0; i--) {
+    const { events } = tablesFor(STAGES[i]);
+    const [[r]] = await conn.query(
+      `SELECT MIN(COALESCE(manual_date, DATE(created_at))) AS eff FROM ${events} WHERE cutting_lot_id = ?`,
+      [cuttingLotId]
+    );
+    if (r && r.eff != null) {
+      // CAST both sides: mysql2 serializes a JS Date param as a datetime string,
+      // and a bare '2026-08-03' < '2026-08-03 00:00:00' string compare is true.
+      const [[c]] = await conn.query(
+        'SELECT (CAST(? AS DATE) < CAST(? AS DATE)) AS too_early', [raw, r.eff]
+      );
+      if (c && Number(c.too_early)) {
+        throw new Error(`Manual date is before the ${STAGES[i].replace(/_/g, ' ')} stage started for this lot`);
+      }
+      return raw;
+    }
+  }
+
+  const [[cut]] = await conn.query(
+    `SELECT (? < COALESCE(manual_cutting_date, DATE(created_at))) AS too_early
+       FROM cutting_lots WHERE id = ?`,
+    [raw, cuttingLotId]
+  );
+  if (cut && Number(cut.too_early)) {
+    throw new Error('Manual date is before the lot was cut');
+  }
+  return raw;
+}
+
 module.exports = {
   STAGES,
   tablesFor,
@@ -333,4 +421,6 @@ module.exports = {
   getOpenApprovals,
   recordEvent,
   normalizeSizeLabel,
+  assertManualDateNotFuture,
+  resolveManualDate,
 };

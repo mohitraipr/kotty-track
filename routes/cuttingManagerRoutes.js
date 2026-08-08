@@ -11,6 +11,8 @@ const generateLotNumber = require('../utils/generateLotNumber'); // Import the u
 const { cache } = require('../utils/cache');
 const { allowAdhocCuttingEntry, isKnownFabricType } = require('../utils/storeSettings');
 const highAgeing = require('../utils/highAgeing');
+const { assertManualDateNotFuture } = require('../utils/stageEvents');
+const { writeLotAudit } = require('../utils/lotAudit');
 
 // Multer setup for image uploads
 const storage = multer.diskStorage({
@@ -319,6 +321,17 @@ router.post(
       try {
         await conn.beginTransaction();
 
+        // Manual cutting date: optional; must be a real date and not in the future.
+        const manualCuttingDate = (manual_cutting_date && String(manual_cutting_date).trim())
+          ? String(manual_cutting_date).trim()
+          : null;
+        if (manualCuttingDate) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(manualCuttingDate)) {
+            throw new Error('Invalid manual cutting date (use YYYY-MM-DD)');
+          }
+          await assertManualDateNotFuture(conn, manualCuttingDate);
+        }
+
         // Determine flow_type: honour the cutter's explicit selection on the form
         // ('denim' or 'hosiery'), otherwise fall back to the is_denim_cutter default.
         // Safe to set here because no stage events exist yet at lot creation.
@@ -357,7 +370,7 @@ router.post(
             fabric_type,
             remark || null,
             table_length ? parseFloat(table_length) : null,
-            (manual_cutting_date && String(manual_cutting_date).trim()) ? String(manual_cutting_date).trim() : null,
+            manualCuttingDate,
             image ? image.path : null,
             userId,
             flowType,
@@ -365,6 +378,15 @@ router.post(
         );
 
         const cuttingLotId = result.insertId;
+
+        if (manualCuttingDate) {
+          await writeLotAudit(conn, {
+            cutting_lot_id: cuttingLotId, lot_no,
+            action: 'manual_date',
+            detail: { stage: 'cutting', manual_cutting_date: manualCuttingDate, source: 'create' },
+            performed_by: userId, performed_by_name: username,
+          });
+        }
 
         // Handle sizes if provided (using parseFloat for decimal values)
         let sizes = [];

@@ -73,6 +73,15 @@ function fmtIST(d) {
   return dt.toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-');
 }
 
+// Date-only variant for bare DATE columns (manual dates) — fmtIST would render
+// a meaningless ", 00:00:00" time on them.
+function fmtISTDate(d) {
+  if (!d) return '';
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return '';
+  return dt.toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-');
+}
+
 function daysSince(dateValue) {
   // NOTE: operatorRoutes.js had two top-level daysSince() declarations; in sloppy
   // mode the LAST one won, so buildEnhancedRow effectively used this version.
@@ -222,6 +231,7 @@ function buildEnhancedRow({
     stitchOp:        opName(stAssign),
     stitchAssignedOn: fmtIST(stAssign && stAssign.assigned_on),
     stitchApprovedOn: fmtIST(stAssign && stAssign.approved_on),
+    stitchManualDate: fmtISTDate(stAssign && stAssign.manual_date),
     stitchInQty:     stitch.in,
     stitchOutQty:    stitch.out,
     stitchPendingQty: stitch.pending,
@@ -232,6 +242,7 @@ function buildEnhancedRow({
     assemblyOp:        isDenim ? opName(asmAssign) : '—',
     assemblyAssignedOn: isDenim ? fmtIST(asmAssign && asmAssign.assigned_on) : '—',
     assemblyApprovedOn: isDenim ? fmtIST(asmAssign && asmAssign.approved_on) : '—',
+    assemblyManualDate: isDenim ? fmtISTDate(asmAssign && asmAssign.manual_date) : '—',
     assemblyInQty:     assembly.in,
     assemblyOutQty:    assembly.out,
     assemblyPendingQty: assembly.pending,
@@ -242,6 +253,7 @@ function buildEnhancedRow({
     washingOp:        isDenim ? opName(washAssign) : '—',
     washingAssignedOn: isDenim ? fmtIST(washAssign && washAssign.assigned_on) : '—',
     washingApprovedOn: isDenim ? fmtIST(washAssign && washAssign.approved_on) : '—',
+    washingManualDate: isDenim ? fmtISTDate(washAssign && washAssign.manual_date) : '—',
     washingInQty_in:  washing.in,
     washingOutQty:    washing.out,
     washingPendingQty: washing.pending,
@@ -252,6 +264,7 @@ function buildEnhancedRow({
     washInOp:        isDenim ? opName(washInAssign) : '—',
     washInAssignedOn: isDenim ? fmtIST(washInAssign && washInAssign.assigned_on) : '—',
     washInApprovedOn: isDenim ? fmtIST(washInAssign && washInAssign.approved_on) : '—',
+    washInManualDate: isDenim ? fmtISTDate(washInAssign && washInAssign.manual_date) : '—',
     washInInQty:     washIn.in,
     washInOutQty:    washIn.out,
     washInPendingQty: washIn.pending,
@@ -279,6 +292,7 @@ function buildEnhancedRow({
     finishingOp:        opName(finAssign),
     finishingAssignedOn: fmtIST(finAssign && finAssign.assigned_on),
     finishingApprovedOn: fmtIST(finAssign && finAssign.approved_on),
+    finishingManualDate: fmtISTDate(finAssign && finAssign.manual_date),
     finishingInQty:     finishing.in,
     finishingOutQty:    finishing.out,
     finishingPendingQty: finishing.pending,
@@ -311,6 +325,7 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Stitch Operator',     key: 'stitchOp',          width: 14 },
   { header: 'Stitch Assigned On',  key: 'stitchAssignedOn',  width: 19 },
   { header: 'Stitch Approved On',  key: 'stitchApprovedOn',  width: 19 },
+  { header: 'Stitch Manual Date',  key: 'stitchManualDate',  width: 13 },
   { header: 'Stitch Approved',       key: 'stitchInQty',       width: 11 },
   { header: 'Stitch Completed',      key: 'stitchOutQty',      width: 11 },
   { header: 'Stitch Pending Qty',  key: 'stitchPendingQty',  width: 12 },
@@ -320,6 +335,7 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Assembly Operator',     key: 'assemblyOp',          width: 14 },
   { header: 'Assembly Assigned On',  key: 'assemblyAssignedOn',  width: 19 },
   { header: 'Assembly Approved On',  key: 'assemblyApprovedOn',  width: 19 },
+  { header: 'Assembly Manual Date',  key: 'assemblyManualDate',  width: 13 },
   { header: 'Assembly Approved',       key: 'assemblyInQty',       width: 11 },
   { header: 'Assembly Completed',      key: 'assemblyOutQty',      width: 11 },
   { header: 'Assembly Pending Qty',  key: 'assemblyPendingQty',  width: 12 },
@@ -329,6 +345,7 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Washing Operator',     key: 'washingOp',          width: 14 },
   { header: 'Washing Assigned On',  key: 'washingAssignedOn',  width: 19 },
   { header: 'Washing Approved On',  key: 'washingApprovedOn',  width: 19 },
+  { header: 'Washing Manual Date',  key: 'washingManualDate',  width: 13 },
   { header: 'Washing Approved',       key: 'washingInQty_in',    width: 11 },
   { header: 'Washing Completed',      key: 'washingOutQty',      width: 11 },
   { header: 'Washing Pending Qty',  key: 'washingPendingQty',  width: 12 },
@@ -338,6 +355,7 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Wash-In Operator',     key: 'washInOp',           width: 14 },
   { header: 'Wash-In Assigned On',  key: 'washInAssignedOn',   width: 19 },
   { header: 'Wash-In Approved On',  key: 'washInApprovedOn',   width: 19 },
+  { header: 'Wash-In Manual Date',  key: 'washInManualDate',   width: 13 },
   { header: 'Wash-In Approved',       key: 'washInInQty',        width: 11 },
   { header: 'Wash-In Completed',      key: 'washInOutQty',       width: 11 },
   { header: 'Wash-In Pending Qty',  key: 'washInPendingQty',   width: 12 },
@@ -351,6 +369,7 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Finishing Operator',     key: 'finishingOp',          width: 14 },
   { header: 'Finishing Assigned On',  key: 'finishingAssignedOn',  width: 19 },
   { header: 'Finishing Approved On',  key: 'finishingApprovedOn',  width: 19 },
+  { header: 'Finishing Manual Date',  key: 'finishingManualDate',  width: 13 },
   { header: 'Finishing Approved',       key: 'finishingInQty',       width: 11 },
   { header: 'Finishing Completed',      key: 'finishingOutQty',      width: 11 },
   { header: 'Finishing Pending Qty',  key: 'finishingPendingQty',  width: 12 },
@@ -415,9 +434,10 @@ async function fetchLotEventAggregates(lotNos = []) {
       [lotNos, lotNos, lotNos, lotNos, lotNos]
     );
 
-    // Per-stage approve events, ordered so the first row per lot is the latest.
+    // Per-stage approve events, ordered so the first row per lot is the latest
+    // (latest by real entry time — manual_date only shifts the displayed date).
     const opSql = (table) => `
-      SELECT cl.lot_no, e.created_at, u.username AS opName, e.operator_id
+      SELECT cl.lot_no, e.created_at, e.manual_date, u.username AS opName, e.operator_id
         FROM ${table} e
         JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
         JOIN users u ON u.id = e.operator_id
@@ -475,10 +495,12 @@ async function fetchLotEventAggregates(lotNos = []) {
       const m = {};
       for (const r of rows) {
         if (m[r.lot_no]) continue; // first occurrence is latest (DESC order)
+        const eff = r.manual_date || r.created_at;
         m[r.lot_no] = {
           is_approved: 1,
-          assigned_on: r.created_at,
-          approved_on: r.created_at,
+          assigned_on: eff,
+          approved_on: eff,
+          manual_date: r.manual_date || null,
           opName:      r.opName,
           user_id:     r.operator_id,
         };
@@ -1058,7 +1080,7 @@ async function buildPicSizeRows({
             SELECT 1 FROM ${evtTable} e
              WHERE e.cutting_lot_id = cl.id
                AND e.event_type = 'approve'
-               AND DATE(e.created_at) BETWEEN ? AND ?
+               AND COALESCE(e.manual_date, DATE(e.created_at)) BETWEEN ? AND ?
           )`;
         dateParams.push(sd, ed);
       }
@@ -1292,12 +1314,12 @@ function buildPicSizeWorkbook(finalData) {
     { header: 'Remark',              key: 'remark',            width: 26 },
   ];
   const stageColKeys = new Set([
-    'stitchOp','stitchAssignedOn','stitchApprovedOn','stitchInQty','stitchOutQty','stitchPendingQty','stitchStatus','stitchInline',
-    'assemblyOp','assemblyAssignedOn','assemblyApprovedOn','assemblyInQty','assemblyOutQty','assemblyPendingQty','assemblyStatus','assemblyInline',
-    'washingOp','washingAssignedOn','washingApprovedOn','washingInQty_in','washingOutQty','washingPendingQty','washingStatus','washingInline',
-    'washInOp','washInAssignedOn','washInApprovedOn','washInInQty','washInOutQty','washInPendingQty','washInStatus','washInInline',
+    'stitchOp','stitchAssignedOn','stitchApprovedOn','stitchManualDate','stitchInQty','stitchOutQty','stitchPendingQty','stitchStatus','stitchInline',
+    'assemblyOp','assemblyAssignedOn','assemblyApprovedOn','assemblyManualDate','assemblyInQty','assemblyOutQty','assemblyPendingQty','assemblyStatus','assemblyInline',
+    'washingOp','washingAssignedOn','washingApprovedOn','washingManualDate','washingInQty_in','washingOutQty','washingPendingQty','washingStatus','washingInline',
+    'washInOp','washInAssignedOn','washInApprovedOn','washInManualDate','washInInQty','washInOutQty','washInPendingQty','washInStatus','washInInline',
     'rewashRequestedQty','rewashPendingQty','rewashCompletedQty',
-    'finishingOp','finishingAssignedOn','finishingApprovedOn','finishingInQty','finishingOutQty','finishingPendingQty','finishingStatus',
+    'finishingOp','finishingAssignedOn','finishingApprovedOn','finishingManualDate','finishingInQty','finishingOutQty','finishingPendingQty','finishingStatus',
     'stitchRejectQty','stitchRejectReasons','washInRejectQty','washInRejectReasons','finishingRejectQty','finishingRejectReasons','totalRejectQty',
   ]);
   for (const c of PIC_REPORT_V2_COLUMNS) {

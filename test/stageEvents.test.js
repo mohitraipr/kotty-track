@@ -119,3 +119,24 @@ test('recordEvent: accepts labels that match the cutting breakdown', async () =>
   assert.strictEqual(id, 123);
   assert.ok(conn.q.some(x => /INSERT INTO \w+_event_sizes/.test(x.sql)));
 });
+
+test('recordEvent: manual_date is bound as the 7th insert value, null when omitted', async () => {
+  const conn = recordStub(['M']);
+  await recordEvent(conn, {
+    stage: 'stitching', cuttingLotId: 1, eventType: 'approve', operatorId: 9,
+    sizes: [{ size_label: 'M', pieces: 10 }],
+    manualDate: '2026-08-05',
+  });
+  const withDate = conn.q.find(x => /INSERT INTO \w+_events/.test(x.sql));
+  assert.ok(/manual_date/.test(withDate.sql));
+  assert.strictEqual(withDate.params.length, 7);
+  assert.strictEqual(withDate.params[6], '2026-08-05');
+
+  const conn2 = recordStub(['M']);
+  await recordEvent(conn2, {
+    stage: 'stitching', cuttingLotId: 1, eventType: 'approve', operatorId: 9,
+    sizes: [{ size_label: 'M', pieces: 10 }],
+  });
+  const without = conn2.q.find(x => /INSERT INTO \w+_events/.test(x.sql));
+  assert.strictEqual(without.params[6], null);
+});

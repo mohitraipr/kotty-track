@@ -32,7 +32,7 @@ async function resolveLot(q) {
   const like = `%${exact}%`;
   const [rows] = await pool.query(
     `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.sku, cl.total_pieces, cl.flow_type,
-            cl.remark, cl.created_at, cl.user_id AS cutter_id, u.username AS cutter_name
+            cl.remark, cl.created_at, cl.manual_cutting_date, cl.user_id AS cutter_id, u.username AS cutter_name
        FROM cutting_lots cl
   LEFT JOIN users u ON u.id = cl.user_id
       WHERE cl.lot_no = ? OR cl.manual_lot_number = ?
@@ -47,16 +47,20 @@ async function resolveLot(q) {
 // Timing + accountable master for one stage from its events table.
 async function stageTiming(table, lotId) {
   const [rows] = await pool.query(
-    `SELECT e.event_type, e.created_at, u.username
+    `SELECT e.event_type, e.created_at, e.manual_date, u.username
        FROM \`${table}\` e LEFT JOIN users u ON u.id = e.operator_id
       WHERE e.cutting_lot_id = ? ORDER BY e.created_at`,
     [lotId]
   );
   let entered = null; let completedAt = null; let master = null;
   for (const r of rows) {
-    if (!entered) entered = r.created_at;
-    if (r.event_type === 'complete' && (!completedAt || new Date(r.created_at) > new Date(completedAt))) {
-      completedAt = r.created_at;
+    // Effective date: the user-declared floor date wins over the upload time.
+    // Manual dates can be out of created_at order, so min/max explicitly.
+    // Master stays "first approver by entry order" — accountability tracks who acted.
+    const eff = r.manual_date || r.created_at;
+    if (!entered || new Date(eff) < new Date(entered)) entered = eff;
+    if (r.event_type === 'complete' && (!completedAt || new Date(eff) > new Date(completedAt))) {
+      completedAt = eff;
     }
     if (r.event_type === 'approve' && !master) master = r.username;
   }
@@ -75,7 +79,7 @@ async function buildActivity(lot) {
   const stageEventRows = {};
   for (const stage of stageEvents.STAGES) {
     const [rows] = await pool.query(
-      `SELECT e.event_type, e.pieces, e.remark, e.created_at, u.username
+      `SELECT e.event_type, e.pieces, e.remark, e.created_at, e.manual_date, u.username
          FROM \`${EVENT_TABLE[stage]}\` e LEFT JOIN users u ON u.id = e.operator_id
         WHERE e.cutting_lot_id = ? ORDER BY e.created_at, e.id`,
       [lot.id]
@@ -107,6 +111,7 @@ async function buildActivity(lot) {
     cutting: {
       created_at: lot.created_at, by: lot.cutter_name,
       total_pieces: lot.total_pieces, note: lot.remark || '',
+      manual_date: lot.manual_cutting_date || null,
     },
     stageEvents: stageEventRows,
     dispatches,
@@ -135,7 +140,7 @@ async function buildJourney(lot) {
     const next = stages[i + 1];
     let entered; let master; let pieces; let completedAt = null;
     if (stage === 'cutting') {
-      entered = lot.created_at;
+      entered = lot.manual_cutting_date || lot.created_at;
       master = lot.cutter_name;
       pieces = { approved: lot.total_pieces, completed: lot.total_pieces, rejected: 0, inline: 0 };
     } else {
@@ -230,6 +235,7 @@ router.get('/export', isAuthenticated, isOperator, async (req, res) => {
       { header: 'SKU',           key: 'sku',     width: 22 },
       { header: 'Date',          key: 'date',    width: 13 },
       { header: 'Time',          key: 'time',    width: 10 },
+      { header: 'Manual Date',   key: 'manual_date', width: 13 },
       { header: 'Flow',          key: 'flow',    width: 14 },
       { header: 'Update',        key: 'update',  width: 18 },
       { header: 'Pieces',        key: 'pieces',  width: 9 },
@@ -243,6 +249,7 @@ router.get('/export', isAuthenticated, isOperator, async (req, res) => {
         lot_no: lot.lot_no, manual: lot.manual_lot_number || '', sku: lot.sku,
         date: new Date(a.when).toLocaleDateString('en-IN', dateOpts),
         time: new Date(a.when).toLocaleTimeString('en-IN', timeOpts),
+        manual_date: a.manual_date ? new Date(a.manual_date).toLocaleDateString('en-IN', dateOpts) : '',
         flow: ACT_STAGE_LABEL[a.stage] || a.stage,
         update: a.label,
         pieces: a.pieces != null ? a.pieces : '',

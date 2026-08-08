@@ -128,3 +128,50 @@ test('fnv1a distinguishes lot lists with same length, first and last', () => {
   assert.notStrictEqual(fnv1a(a), fnv1a(b));
   assert.strictEqual(fnv1a(a), fnv1a(a)); // stable
 });
+
+// ── Manual date shadow columns ─────────────────────────────────────────────
+const { PIC_REPORT_V2_COLUMNS } = require('../utils/picSizeReport.js');
+
+test('manual date: assignedOn reflects the effective date and *ManualDate keys populate', () => {
+  const row = buildEnhancedRow({
+    lot: LOT, isDenim: true, totalCut: 100,
+    sums:     { stitchedQty: 0, assembledQty: 0, washedQty: 0, washingInQty: 0, finishedQty: 0 },
+    approved: { stitchApproved: 100, assemblyApproved: 0, washingApproved: 0, washInApproved: 0, finishingApproved: 0 },
+    assigns: {
+      ...NO_ASSIGNS,
+      // What fetchLotEventAggregates now produces: assigned_on/approved_on are
+      // already the effective (manual-preferred) date, manual_date is the raw shadow.
+      stAssign: {
+        is_approved: 1, assigned_on: '2026-08-03', approved_on: '2026-08-03',
+        manual_date: '2026-08-03', opName: 'stitchA', user_id: 9,
+      },
+    },
+    dispatched: 0,
+  });
+  assert.strictEqual(row.stitchManualDate, '03-08-2026');
+  assert.ok(row.stitchAssignedOn.startsWith('03-08-2026'));
+  // stages without a manual date stay blank (denim, no assign yet)
+  assert.strictEqual(row.finishingManualDate, '');
+  assert.strictEqual(row.washingManualDate, '');
+});
+
+test('manual date: non-denim lots show the N/A dash on denim-only stage manual dates', () => {
+  const row = buildEnhancedRow({
+    lot: LOT, isDenim: false, totalCut: 100,
+    sums:     { stitchedQty: 0, assembledQty: 0, washedQty: 0, washingInQty: 0, finishedQty: 0 },
+    approved: { stitchApproved: 0, assemblyApproved: 0, washingApproved: 0, washInApproved: 0, finishingApproved: 0 },
+    assigns: NO_ASSIGNS, dispatched: 0,
+  });
+  assert.strictEqual(row.assemblyManualDate, '—');
+  assert.strictEqual(row.washingManualDate, '—');
+  assert.strictEqual(row.washInManualDate, '—');
+});
+
+test('manual date: PIC_REPORT_V2_COLUMNS carries the five stage manual-date columns', () => {
+  const keys = PIC_REPORT_V2_COLUMNS.map(c => c.key);
+  for (const k of ['stitchManualDate', 'assemblyManualDate', 'washingManualDate', 'washInManualDate', 'finishingManualDate']) {
+    assert.ok(keys.includes(k), `missing column ${k}`);
+  }
+  const headers = PIC_REPORT_V2_COLUMNS.map(c => c.header);
+  assert.ok(headers.includes('Stitch Manual Date'));
+});

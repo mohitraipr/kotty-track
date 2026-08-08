@@ -215,7 +215,8 @@ function renderActivity(activity, lotNo){
   }
   h += activity.map(a=>
     '<div class="act-row">'+
-      '<span class="act-when">'+fmtWhen(a.when)+'</span>'+
+      '<span class="act-when">'+fmtWhen(a.when)+
+        (a.manual_date?(' <span class="muted" title="Actual work date entered by the master">(manual: '+fmtDate(a.manual_date)+')</span>'):'')+'</span>'+
       '<span class="act-pill act-stage">'+esc(ACT_STAGE_LABEL[a.stage]||a.stage)+'</span>'+
       '<span class="act-pill act-k-'+esc(a.kind)+'">'+esc(a.label)+'</span>'+
       '<span class="act-meta">'+
