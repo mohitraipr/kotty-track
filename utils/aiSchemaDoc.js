@@ -32,7 +32,10 @@ Stage order: cutting → stitching → [jeans_assembly → washing → washing_i
 - Event tables (append-only ledger): stitching_events, jeans_assembly_events,
   washing_events, washing_in_events, finishing_events. Columns: cutting_lot_id,
   event_type ENUM('approve','complete','reject'), pieces, parent_event_id,
-  operator_id (join users), created_at. Per-size detail in *_event_sizes.
+  operator_id (join users), created_at, manual_date (DATE NULL — the actual
+  floor date when the master backdates an entry; for display/day-bucketing use
+  COALESCE(manual_date, DATE(created_at)); payments and in-flight windows use
+  raw created_at). Per-size detail in *_event_sizes.
   Semantics: 'approve' = pieces TAKEN INTO the stage (this is also the payment
   event — it pays the UPSTREAM stage's worker); 'complete' = pieces finished at
   the stage; 'reject' with parent_event_id NULL = rejected at handover,
@@ -48,8 +51,8 @@ Stage order: cutting → stitching → [jeans_assembly → washing → washing_i
   confirmed/failed/cancelled ('blocked' = a size has no EasyEcom SKU mapping;
   'confirmed' = warehouse GRN'd it in EasyEcom), po_id, total_qty, created_at.
 - pm_lot_audit_log: admin corrections. EXACT columns: cutting_lot_id, lot_no,
-  action ('flow_change'/'stage_reversal'/'qty_edit'), detail (JSON),
-  performed_by_name, created_at.
+  action ('flow_change'/'stage_reversal'/'qty_edit'/'manual_date'), detail
+  (JSON), performed_by_name, created_at.
 
 ## Payments (per-piece piecework)
 - stage_payments (worker earnings, one row per approve handover). EXACT

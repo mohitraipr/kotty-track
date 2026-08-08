@@ -1835,6 +1835,7 @@ function buildTakeCard() {
       </div>
       ${hasRewash ? '<div class="sx-form-row"><input type="text" data-input="rewash-reason" placeholder="Reason for rewash (e.g. still wet, improper wash)" /></div>' : ''}
       <div class="sx-form-row"><input type="text" data-input="reject-reason" placeholder="Reason for reject (e.g. fabric defect)" /></div>
+      <div class="sx-form-row"><label style="display:flex;align-items:center;gap:.5rem;width:100%;">Actual date (optional)<input type="date" data-input="take-date" max="${istToday()}" title="Actual date the work happened — leave blank for today" style="flex:1;" /></label></div>
       <div class="sx-form-row"><input type="text" data-input="take-remark" placeholder="Add remarks (optional)" /></div>
       <button class="sx-action-cta" data-action="take-confirm">
         Take ${fmt(totalAvailable)} pieces
@@ -1891,7 +1892,7 @@ function buildTakeCard() {
   card.querySelector('[data-action="take-confirm"]').addEventListener('click', () => {
     // Route based on current state: pure all-take → fast path; any exception → submit splits.
     if (cardHasException(card)) doTakeFromForm(card);
-    else                        doTakeAll();
+    else                        doTakeAll(card);
   });
 
   recalcTakeTotal(card);
@@ -1975,7 +1976,15 @@ function recalcTakeTotal(card) {
   }
 }
 
-async function doTakeAll() {
+// IST calendar day for the date-picker max (no future manual dates; server re-validates).
+function istToday() { return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }); }
+function cardManualDate(card, key) {
+  if (!card) return null;
+  const i = card.querySelector('[data-input="' + key + '"]');
+  return (i && i.value) ? i.value : null;
+}
+
+async function doTakeAll(card) {
   const upstream = currentState.upstream_sizes;
   const sizes = upstream
     .filter(s => (s.available || 0) > 0)
@@ -1983,7 +1992,7 @@ async function doTakeAll() {
   if (!sizes.length) return;
   const total = sizes.reduce((a, s) => a + s.pieces, 0);
   if (!confirm('Take ' + fmt(total) + ' pieces of ' + (currentLot.lot_no || '').toUpperCase() + ' into ' + STAGE_LABEL.toLowerCase() + '?')) return;
-  await doTakeRequest({ sizes, rejected_sizes: [], rewash_sizes: [] });
+  await doTakeRequest({ sizes, rejected_sizes: [], rewash_sizes: [], manual_date: cardManualDate(card, 'take-date') });
 }
 
 async function doTakeFromForm(card) {
@@ -2018,6 +2027,7 @@ async function doTakeFromForm(card) {
   if (!confirm(msg + ' for ' + (currentLot.lot_no || '').toUpperCase() + '?')) return;
   await doTakeRequest({
     sizes, rejected_sizes, rewash_sizes,
+    manual_date: cardManualDate(card, 'take-date'),
     remark: remark.trim() || null,
     reject_reason: reject_reason.trim() || null,
     rewash_reason: rewash_reason.trim() || null,
@@ -2055,6 +2065,7 @@ function buildDoneCard(approve) {
         <span class="gl">Grand Total</span>
         <span class="gv is-done-gv">Done <strong data-display="done-total">0</strong> pcs<span class="gx" data-x="reject" style="display:none;"> · <strong data-display="reject-total">0</strong> reject</span></span>
       </div>
+      <div class="sx-form-row"><label style="display:flex;align-items:center;gap:.5rem;width:100%;">Actual date (optional)<input type="date" data-input="done-date" max="${istToday()}" title="Actual date the work happened — leave blank for today" style="flex:1;" /></label></div>
       <div class="sx-form-row"><input type="text" data-input="done-remark" placeholder="Completion note (optional)" /></div>
       <button class="sx-action-cta" data-action="done-confirm">
         Mark ${fmt(approve.inline)} pieces done
@@ -2100,7 +2111,7 @@ function buildDoneCard(approve) {
   card.querySelector('[data-action="done-confirm"]').addEventListener('click', () => {
     // Reduced any size or added any reject → submit the form; otherwise fast all-done path.
     if (doneCardDirty(card)) doMarkDoneFromForm(card, approve);
-    else doMarkDoneAll(approve);
+    else doMarkDoneAll(approve, card);
   });
 
   recalcDoneTotals(card, approve);
@@ -2170,11 +2181,11 @@ function recalcDoneTotals(card, approve) {
     : ('Mark ' + fmt(done) + ' pieces done');
 }
 
-async function doMarkDoneAll(approve) {
+async function doMarkDoneAll(approve, card) {
   const completed = Object.entries(approve.remaining_sizes).map(([size_label, pieces]) => ({ size_label, pieces }));
   const total = completed.reduce((a, s) => a + s.pieces, 0);
   if (!confirm('Mark ' + fmt(total) + ' pieces of ' + (currentLot.lot_no || '').toUpperCase() + ' as done?')) return;
-  await doMarkDoneRequest(approve.event_id, completed, [], null, null);
+  await doMarkDoneRequest(approve.event_id, completed, [], null, null, cardManualDate(card, 'done-date'));
 }
 
 async function doMarkDoneFromForm(card, approve) {
@@ -2200,14 +2211,14 @@ async function doMarkDoneFromForm(card, approve) {
 
   const remark = card.querySelector('[data-input="done-remark"]').value.trim() || null;
   const reason = card.querySelector('[data-input="reject-reason"]').value.trim() || null;
-  await doMarkDoneRequest(approve.event_id, cs, rs, remark, reason);
+  await doMarkDoneRequest(approve.event_id, cs, rs, remark, reason, cardManualDate(card, 'done-date'));
 }
 
-async function doMarkDoneRequest(parentId, completed_sizes, rejected_sizes, complete_remark, reject_reason) {
+async function doMarkDoneRequest(parentId, completed_sizes, rejected_sizes, complete_remark, reject_reason, manual_date) {
   try {
     await api('POST', BASE + '/event/complete', {
       parent_event_id: parentId, completed_sizes, rejected_sizes,
-      complete_remark, reject_reason,
+      complete_remark, reject_reason, manual_date,
     });
     toast('Saved ✓', 'success');
     await refreshState();

@@ -1045,7 +1045,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
                 FROM ${evtTable} e
                WHERE e.cutting_lot_id = cl.id
                  AND e.event_type = 'approve'
-                 AND DATE(e.created_at) BETWEEN ? AND ?
+                 AND COALESCE(e.manual_date, DATE(e.created_at)) BETWEEN ? AND ?
             )
           `;
           dateParams.push(startDate, endDate);
@@ -1470,14 +1470,14 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
                cl.sku,
                cl.total_pieces,
                cl.remark AS cutting_remark,
-               MIN(CASE WHEN se.event_type='approve'  THEN se.created_at END) AS firstApproveAt,
-               MAX(CASE WHEN se.event_type='complete' THEN se.created_at END) AS lastCompleteAt,
+               MIN(CASE WHEN se.event_type='approve'  THEN COALESCE(se.manual_date, se.created_at) END) AS firstApproveAt,
+               MAX(CASE WHEN se.event_type='complete' THEN COALESCE(se.manual_date, se.created_at) END) AS lastCompleteAt,
                SUM(CASE WHEN se.event_type='approve'  THEN se.pieces ELSE 0 END) AS approvedPcs,
                SUM(CASE WHEN se.event_type='complete' THEN se.pieces ELSE 0 END) AS completedPcs,
                SUM(CASE WHEN se.event_type='reject'   THEN se.pieces ELSE 0 END) AS rejectedPcs,
-               (SELECT MIN(ae.created_at) FROM jeans_assembly_events ae
+               (SELECT MIN(COALESCE(ae.manual_date, ae.created_at)) FROM jeans_assembly_events ae
                  WHERE ae.cutting_lot_id = cl.id AND ae.event_type='approve') AS asmFirstApproveAt,
-               (SELECT MIN(fe.created_at) FROM finishing_events fe
+               (SELECT MIN(COALESCE(fe.manual_date, fe.created_at)) FROM finishing_events fe
                  WHERE fe.cutting_lot_id = cl.id AND fe.event_type='approve') AS finFirstApproveAt,
                -- legacy downstream presence (older lots may have no events)
                (SELECT 1 FROM jeans_assembly_data jd WHERE jd.lot_no = cl.lot_no LIMIT 1) AS asmLegacyExists,
@@ -3044,7 +3044,7 @@ router.get('/day-activity/data', isAuthenticated, isOperator, async (req, res) =
               COALESCE(SUM(cl.total_pieces),0) AS pieces
          FROM cutting_lots cl
     LEFT JOIN users u ON u.id = cl.user_id
-        WHERE DATE(cl.created_at) = ?
+        WHERE COALESCE(cl.manual_cutting_date, DATE(cl.created_at)) = ?
      GROUP BY cl.user_id, cl.flow_type
      ORDER BY lots DESC, pieces DESC`,
       [day]
@@ -3089,7 +3089,7 @@ router.get('/day-activity/data', isAuthenticated, isOperator, async (req, res) =
            JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
       LEFT JOIN users u ON u.id = e.operator_id
           WHERE e.event_type = 'approve'
-            AND DATE(e.created_at) = ?
+            AND COALESCE(e.manual_date, DATE(e.created_at)) = ?
        GROUP BY e.operator_id, cl.flow_type
        ORDER BY lots DESC, pieces DESC`,
         [day]

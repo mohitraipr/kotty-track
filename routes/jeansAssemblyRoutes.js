@@ -9,6 +9,7 @@ const { isAuthenticated, isJeansAssemblyMaster } = require('../middlewares/auth'
 const { createStagePayment } = require('../utils/stagePaymentHelper');
 const stageEvents = require('../utils/stageEvents');
 const { getLotStageUsers } = require('../utils/lotStageUsers');
+const { auditStageManualDate } = require('../utils/lotAudit');
 
 // -------------------------------------
 // MULTER for Image Upload
@@ -1257,7 +1258,7 @@ router.post('/event/approve', isAuthenticated, isJeansAssemblyMaster, async (req
   let conn;
   try {
     const userId = req.session.user.id;
-    const { cutting_lot_id, sizes, rejected_sizes, remark, reject_reason } = req.body;
+    const { cutting_lot_id, sizes, rejected_sizes, remark, reject_reason, manual_date } = req.body;
 
     const lotId = parseInt(cutting_lot_id, 10);
     if (!Number.isFinite(lotId) || lotId <= 0) {
@@ -1283,6 +1284,16 @@ router.post('/event/approve', isAuthenticated, isJeansAssemblyMaster, async (req
     if (!lot) {
       await conn.rollback();
       return res.status(404).json({ error: 'Lot not found' });
+    }
+
+    let manualDate;
+    try {
+      manualDate = await stageEvents.resolveManualDate(conn, {
+        stage: STAGE_JA, cuttingLotId: lotId, manualDate: manual_date,
+      });
+    } catch (e) {
+      await conn.rollback();
+      return res.status(400).json({ error: e.message });
     }
 
     const upstream = await jaUpstreamSizes(conn, lotId, lot.lot_no);
@@ -1319,6 +1330,7 @@ router.post('/event/approve', isAuthenticated, isJeansAssemblyMaster, async (req
         sizes: cleanSizes,
         parentEventId: null,
         remark: remark ? String(remark).trim() : null,
+        manualDate,
       });
     }
     if (cleanRejected.length) {
@@ -1330,8 +1342,16 @@ router.post('/event/approve', isAuthenticated, isJeansAssemblyMaster, async (req
         sizes: cleanRejected,
         parentEventId: null,
         remark: reject_reason ? String(reject_reason).trim() : null,
+        manualDate,
       });
     }
+
+    await auditStageManualDate(conn, {
+      cutting_lot_id: lotId, stage: STAGE_JA, event_type: 'approve', manual_date: manualDate,
+      pieces: cleanSizes.reduce((a, s) => a + s.pieces, 0),
+      approve_event_id: approveEventId, reject_event_id: rejectEventId,
+      performed_by: userId, performed_by_name: req.session.user.username,
+    });
 
     await conn.commit();
 
@@ -1381,7 +1401,7 @@ router.post('/event/complete', isAuthenticated, isJeansAssemblyMaster, async (re
   let conn;
   try {
     const userId = req.session.user.id;
-    const { parent_event_id, completed_sizes, rejected_sizes, reject_reason, complete_remark } = req.body;
+    const { parent_event_id, completed_sizes, rejected_sizes, reject_reason, complete_remark, manual_date } = req.body;
 
     const parentId = parseInt(parent_event_id, 10);
     if (!Number.isFinite(parentId) || parentId <= 0) {
@@ -1419,6 +1439,17 @@ router.post('/event/complete', isAuthenticated, isJeansAssemblyMaster, async (re
       return res.status(403).json({
         error: 'You can only complete pieces against your own approve. Ask the original approver to record the completion.',
       });
+    }
+
+    let manualDate;
+    try {
+      manualDate = await stageEvents.resolveManualDate(conn, {
+        stage: STAGE_JA, cuttingLotId: parent.cutting_lot_id, manualDate: manual_date,
+        parentEventId: parentId,
+      });
+    } catch (e) {
+      await conn.rollback();
+      return res.status(400).json({ error: e.message });
     }
 
     const [parentSizesRows] = await conn.query(
@@ -1473,6 +1504,7 @@ router.post('/event/complete', isAuthenticated, isJeansAssemblyMaster, async (re
         sizes: cleanCompleted,
         parentEventId: parentId,
         remark: complete_remark ? String(complete_remark).trim() : null,
+        manualDate,
       });
     }
     if (cleanRejected.length) {
@@ -1484,8 +1516,16 @@ router.post('/event/complete', isAuthenticated, isJeansAssemblyMaster, async (re
         sizes: cleanRejected,
         parentEventId: parentId,
         remark: reject_reason ? String(reject_reason).trim() : null,
+        manualDate,
       });
     }
+
+    await auditStageManualDate(conn, {
+      cutting_lot_id: parent.cutting_lot_id, stage: STAGE_JA, event_type: 'complete', manual_date: manualDate,
+      pieces: cleanCompleted.reduce((a, s) => a + s.pieces, 0),
+      complete_event_id: completeEventId, reject_event_id: rejectEventId,
+      performed_by: userId, performed_by_name: req.session.user.username,
+    });
 
     // Dual-write to jeans_assembly_data for downstream compatibility
     // (washing reads jeans_assembly_data via lot_no in its existing query).

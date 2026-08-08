@@ -68,6 +68,7 @@ const ACTIVITY_LABEL = {
 };
 const ADMIN_ACTION_LABEL = {
   flow_change: 'Flow change', stage_reversal: 'Stage reversal', qty_edit: 'Qty edit',
+  manual_date: 'Manual date',
 };
 
 // Human-readable one-liner from a pm_lot_audit_log detail JSON (object or string).
@@ -96,6 +97,7 @@ function mergeActivity({ cutting, stageEvents, dispatches, audits } = {}) {
       when: cutting.created_at, stage: 'cutting', kind: 'created', label: ACTIVITY_LABEL.created,
       pieces: cutting.total_pieces != null ? Number(cutting.total_pieces) : null,
       by: cutting.by || null, note: cutting.note || '',
+      manual_date: cutting.manual_date || null,
     });
   }
   for (const [stage, events] of Object.entries(stageEvents || {})) {
@@ -106,6 +108,9 @@ function mergeActivity({ cutting, stageEvents, dispatches, audits } = {}) {
         label: ACTIVITY_LABEL[e.event_type] || e.event_type,
         pieces: e.pieces != null ? Number(e.pieces) : null,
         by: e.username || null, note: e.remark || '',
+        // Shadow date: shown alongside, never used for ordering — the feed
+        // stays sorted by real entry time so the chronology is tamper-evident.
+        manual_date: e.manual_date || null,
       });
     }
   }

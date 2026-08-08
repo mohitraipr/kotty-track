@@ -63,7 +63,7 @@ async function loadLotTat({ days, search, remark, flow, overdue, limit }) {
 
   const [lots] = await pool.query(
     `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.sku, cl.total_pieces, cl.flow_type, cl.remark,
-            cl.created_at, cl.user_id AS cutter_id, cu.username AS cutter_name
+            cl.created_at, cl.manual_cutting_date, cl.user_id AS cutter_id, cu.username AS cutter_name
        FROM cutting_lots cl
   LEFT JOIN users cu ON cu.id = cl.user_id
       WHERE ${where}
@@ -83,6 +83,8 @@ async function loadLotTat({ days, search, remark, flow, overdue, limit }) {
       flow_type: l.flow_type || 'unknown',
       remark: l.remark || '',
       created_at: l.created_at,
+      // Effective cut date: the user-declared floor date when present.
+      cut_entered: l.manual_cutting_date || l.created_at,
       cutter: { user_id: l.cutter_id, name: l.cutter_name },
       stages: {}, // per-stage timing + master
     };
@@ -93,7 +95,7 @@ async function loadLotTat({ days, search, remark, flow, overdue, limit }) {
   // master = operator of FIRST approve event (the one accountable).
   for (const [stageKey, table] of Object.entries(STAGE_EVENT_TABLE)) {
     const [rows] = await pool.query(
-      `SELECT e.cutting_lot_id, e.event_type, e.operator_id, e.created_at, u.username
+      `SELECT e.cutting_lot_id, e.event_type, e.operator_id, e.created_at, e.manual_date, u.username
          FROM \`${table}\` e
     LEFT JOIN users u ON u.id = e.operator_id
         WHERE e.cutting_lot_id IN (?)
@@ -105,10 +107,15 @@ async function loadLotTat({ days, search, remark, flow, overdue, limit }) {
       const slot = byLot[r.cutting_lot_id] || (byLot[r.cutting_lot_id] = {
         entered_at: null, completed_at: null, master_id: null, master: null,
       });
-      if (!slot.entered_at) slot.entered_at = r.created_at;
+      // Effective date: manual (floor) date wins over the upload timestamp.
+      // Manual dates can be out of created_at order, so min/max explicitly.
+      const eff = r.manual_date || r.created_at;
+      if (!slot.entered_at || new Date(eff) < new Date(slot.entered_at)) {
+        slot.entered_at = eff;
+      }
       if (r.event_type === 'complete') {
-        if (!slot.completed_at || new Date(r.created_at) > new Date(slot.completed_at)) {
-          slot.completed_at = r.created_at;
+        if (!slot.completed_at || new Date(eff) > new Date(slot.completed_at)) {
+          slot.completed_at = eff;
         }
       }
       if (r.event_type === 'approve' && !slot.master_id) {
@@ -134,8 +141,8 @@ async function loadLotTat({ days, search, remark, flow, overdue, limit }) {
     const stages = lot.flow_type === 'denim' ? STAGES_DENIM : STAGES_HOSIERY;
     const timeline = [];
 
-    // Cutting is special — no events table; created_at IS the entry point.
-    let prevExit = lot.created_at;
+    // Cutting is special — no events table; its effective cut date is the entry point.
+    let prevExit = lot.cut_entered;
 
     for (let i = 0; i < stages.length; i++) {
       const stage = stages[i];
@@ -143,7 +150,7 @@ async function loadLotTat({ days, search, remark, flow, overdue, limit }) {
 
       let entered, master, masterId, completedAt;
       if (stage === 'cutting') {
-        entered = lot.created_at;
+        entered = lot.cut_entered;
         master  = lot.cutter.name;
         masterId = lot.cutter.user_id;
       } else {
@@ -284,7 +291,7 @@ router.get('/download', isAuthenticated, isOperator, async (req, res) => {
       const row = {
         lot_no: lot.lot_no, manual_lot_number: lot.manual_lot_number || '', sku: lot.sku, dept: lot.flow_type,
         pieces: lot.pieces, remark: lot.remark || '',
-        cutter: lot.cutter.name || '', cut_date: fmt(lot.created_at),
+        cutter: lot.cutter.name || '', cut_date: fmt(lot.cut_entered),
         current_stage: lot.current_stage,
         cutting_days: dayCell(byStage.cutting),
         cutting_master: byStage.cutting ? byStage.cutting.master || '' : '',

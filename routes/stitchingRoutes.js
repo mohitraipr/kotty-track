@@ -8,6 +8,7 @@ const { isAuthenticated, isStitchingMaster } = require('../middlewares/auth');
 const { createStagePayment } = require('../utils/stagePaymentHelper');
 const stageEvents = require('../utils/stageEvents');
 const { getLotStageUsers } = require('../utils/lotStageUsers');
+const { auditStageManualDate } = require('../utils/lotAudit');
 
 // ----------------------------
 // MULTER SETUP (for image uploads)
@@ -237,7 +238,7 @@ router.post('/event/approve', isAuthenticated, isStitchingMaster, async (req, re
   let conn;
   try {
     const userId = req.session.user.id;
-    const { cutting_lot_id, sizes, rejected_sizes, remark, reject_reason } = req.body;
+    const { cutting_lot_id, sizes, rejected_sizes, remark, reject_reason, manual_date } = req.body;
 
     const lotId = parseInt(cutting_lot_id, 10);
     if (!Number.isFinite(lotId) || lotId <= 0) {
@@ -255,6 +256,16 @@ router.post('/event/approve', isAuthenticated, isStitchingMaster, async (req, re
 
     conn = await pool.getConnection();
     await conn.beginTransaction();
+
+    let manualDate;
+    try {
+      manualDate = await stageEvents.resolveManualDate(conn, {
+        stage: STAGE, cuttingLotId: lotId, manualDate: manual_date,
+      });
+    } catch (e) {
+      await conn.rollback();
+      return res.status(400).json({ error: e.message });
+    }
 
     const [cutSizesRows] = await conn.query(
       `SELECT size_label, total_pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?`,
@@ -301,6 +312,7 @@ router.post('/event/approve', isAuthenticated, isStitchingMaster, async (req, re
         sizes: cleanSizes,
         parentEventId: null,
         remark: remark ? String(remark).trim() : null,
+        manualDate,
       });
     }
     if (cleanRejected.length) {
@@ -312,8 +324,16 @@ router.post('/event/approve', isAuthenticated, isStitchingMaster, async (req, re
         sizes: cleanRejected,
         parentEventId: null,
         remark: reject_reason ? String(reject_reason).trim() : null,
+        manualDate,
       });
     }
+
+    await auditStageManualDate(conn, {
+      cutting_lot_id: lotId, stage: STAGE, event_type: 'approve', manual_date: manualDate,
+      pieces: cleanSizes.reduce((a, s) => a + s.pieces, 0),
+      approve_event_id: approveEventId, reject_event_id: rejectEventId,
+      performed_by: userId, performed_by_name: req.session.user.username,
+    });
 
     await conn.commit();
     res.json({
@@ -351,7 +371,7 @@ router.post('/event/complete', isAuthenticated, isStitchingMaster, async (req, r
   let conn;
   try {
     const userId = req.session.user.id;
-    const { parent_event_id, completed_sizes, rejected_sizes, reject_reason, complete_remark } = req.body;
+    const { parent_event_id, completed_sizes, rejected_sizes, reject_reason, complete_remark, manual_date } = req.body;
 
     const parentId = parseInt(parent_event_id, 10);
     if (!Number.isFinite(parentId) || parentId <= 0) {
@@ -389,6 +409,17 @@ router.post('/event/complete', isAuthenticated, isStitchingMaster, async (req, r
       return res.status(403).json({
         error: 'You can only complete pieces against your own approve. Ask the original approver to record the completion.',
       });
+    }
+
+    let manualDate;
+    try {
+      manualDate = await stageEvents.resolveManualDate(conn, {
+        stage: STAGE, cuttingLotId: parent.cutting_lot_id, manualDate: manual_date,
+        parentEventId: parentId,
+      });
+    } catch (e) {
+      await conn.rollback();
+      return res.status(400).json({ error: e.message });
     }
 
     // Per-size: completed + rejected so far + new completed + new rejected <= approved (per size)
@@ -446,6 +477,7 @@ router.post('/event/complete', isAuthenticated, isStitchingMaster, async (req, r
         sizes: cleanCompleted,
         parentEventId: parentId,
         remark: complete_remark ? String(complete_remark).trim() : null,
+        manualDate,
       });
     }
     if (cleanRejected.length) {
@@ -457,8 +489,16 @@ router.post('/event/complete', isAuthenticated, isStitchingMaster, async (req, r
         sizes: cleanRejected,
         parentEventId: parentId,
         remark: reject_reason ? String(reject_reason).trim() : null,
+        manualDate,
       });
     }
+
+    await auditStageManualDate(conn, {
+      cutting_lot_id: parent.cutting_lot_id, stage: STAGE, event_type: 'complete', manual_date: manualDate,
+      pieces: cleanCompleted.reduce((a, s) => a + s.pieces, 0),
+      complete_event_id: completeEventId, reject_event_id: rejectEventId,
+      performed_by: userId, performed_by_name: req.session.user.username,
+    });
 
     // Dual-write: also append a stitching_data row for the COMPLETED pieces
     // so downstream stages still reading stitching_data keep working until

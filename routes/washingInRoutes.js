@@ -13,6 +13,7 @@ const { isAuthenticated, isWashingInMaster } = require('../middlewares/auth');
 const { createStagePayment } = require('../utils/stagePaymentHelper');
 const stageEvents = require('../utils/stageEvents');
 const { getLotStageUsers } = require('../utils/lotStageUsers');
+const { auditStageManualDate } = require('../utils/lotAudit');
 
 // ----------------------------------------------
 // MULTER SETUP (for optional image uploads)
@@ -561,7 +562,7 @@ router.post('/event/approve', isAuthenticated, isWashingInMaster, async (req, re
   let conn;
   try {
     const userId = req.session.user.id;
-    const { cutting_lot_id, sizes, rejected_sizes, rewash_sizes, remark, reject_reason, rewash_reason } = req.body;
+    const { cutting_lot_id, sizes, rejected_sizes, rewash_sizes, remark, reject_reason, rewash_reason, manual_date } = req.body;
     const lotId = parseInt(cutting_lot_id, 10);
     if (!Number.isFinite(lotId) || lotId <= 0) return res.status(400).json({ error: 'Invalid cutting_lot_id' });
 
@@ -583,6 +584,16 @@ router.post('/event/approve', isAuthenticated, isWashingInMaster, async (req, re
 
     const [[lot]] = await conn.query(`SELECT lot_no, sku FROM cutting_lots WHERE id = ?`, [lotId]);
     if (!lot) { await conn.rollback(); return res.status(404).json({ error: 'Lot not found' }); }
+
+    let manualDate;
+    try {
+      manualDate = await stageEvents.resolveManualDate(conn, {
+        stage: STAGE_WI, cuttingLotId: lotId, manualDate: manual_date,
+      });
+    } catch (e) {
+      await conn.rollback();
+      return res.status(400).json({ error: e.message });
+    }
 
     const upstream = await wiUpstreamSizes(conn, lotId, lot.lot_no);
     const upstreamMap = {};
@@ -617,6 +628,7 @@ router.post('/event/approve', isAuthenticated, isWashingInMaster, async (req, re
         stage: STAGE_WI, cuttingLotId: lotId, eventType: 'approve',
         operatorId: userId, sizes: cleanSizes, parentEventId: null,
         remark: remark ? String(remark).trim() : null,
+        manualDate,
       });
     }
     if (cleanRejected.length) {
@@ -624,8 +636,16 @@ router.post('/event/approve', isAuthenticated, isWashingInMaster, async (req, re
         stage: STAGE_WI, cuttingLotId: lotId, eventType: 'reject',
         operatorId: userId, sizes: cleanRejected, parentEventId: null,
         remark: reject_reason ? String(reject_reason).trim() : null,
+        manualDate,
       });
     }
+
+    await auditStageManualDate(conn, {
+      cutting_lot_id: lotId, stage: STAGE_WI, event_type: 'approve', manual_date: manualDate,
+      pieces: cleanSizes.reduce((a, s) => a + s.pieces, 0),
+      approve_event_id: approveEventId, reject_event_id: rejectEventId,
+      performed_by: userId, performed_by_name: req.session.user.username,
+    });
 
     if (cleanRewash.length) {
       // Rewash: pick the upstream washer's washing_data row (largest/most-recent
@@ -758,7 +778,7 @@ router.post('/event/complete', isAuthenticated, isWashingInMaster, async (req, r
   let conn;
   try {
     const userId = req.session.user.id;
-    const { parent_event_id, completed_sizes, rejected_sizes, reject_reason, complete_remark } = req.body;
+    const { parent_event_id, completed_sizes, rejected_sizes, reject_reason, complete_remark, manual_date } = req.body;
     const parentId = parseInt(parent_event_id, 10);
     if (!Number.isFinite(parentId) || parentId <= 0) return res.status(400).json({ error: 'Invalid parent_event_id' });
 
@@ -790,6 +810,17 @@ router.post('/event/complete', isAuthenticated, isWashingInMaster, async (req, r
       return res.status(403).json({
         error: 'You can only complete pieces against your own approve. Ask the original approver to record the completion.',
       });
+    }
+
+    let manualDate;
+    try {
+      manualDate = await stageEvents.resolveManualDate(conn, {
+        stage: STAGE_WI, cuttingLotId: parent.cutting_lot_id, manualDate: manual_date,
+        parentEventId: parentId,
+      });
+    } catch (e) {
+      await conn.rollback();
+      return res.status(400).json({ error: e.message });
     }
 
     const [parentSizesRows] = await conn.query(
@@ -832,6 +863,7 @@ router.post('/event/complete', isAuthenticated, isWashingInMaster, async (req, r
         stage: STAGE_WI, cuttingLotId: parent.cutting_lot_id, eventType: 'complete',
         operatorId: userId, sizes: cleanCompleted, parentEventId: parentId,
         remark: complete_remark ? String(complete_remark).trim() : null,
+        manualDate,
       });
     }
     if (cleanRejected.length) {
@@ -839,8 +871,16 @@ router.post('/event/complete', isAuthenticated, isWashingInMaster, async (req, r
         stage: STAGE_WI, cuttingLotId: parent.cutting_lot_id, eventType: 'reject',
         operatorId: userId, sizes: cleanRejected, parentEventId: parentId,
         remark: reject_reason ? String(reject_reason).trim() : null,
+        manualDate,
       });
     }
+
+    await auditStageManualDate(conn, {
+      cutting_lot_id: parent.cutting_lot_id, stage: STAGE_WI, event_type: 'complete', manual_date: manualDate,
+      pieces: cleanCompleted.reduce((a, s) => a + s.pieces, 0),
+      complete_event_id: completeEventId, reject_event_id: rejectEventId,
+      performed_by: userId, performed_by_name: req.session.user.username,
+    });
 
     if (cleanCompleted.length) {
       const [[lot]] = await conn.query(`SELECT lot_no, sku FROM cutting_lots WHERE id = ?`, [parent.cutting_lot_id]);

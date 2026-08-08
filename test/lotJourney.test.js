@@ -148,3 +148,22 @@ test('currentStage: first in-progress or not-started stage; Done when all finish
   ];
   assert.strictEqual(currentStage(tl2), 'Done');
 });
+
+test('mergeActivity: manual_date passes through but never reorders the feed', () => {
+  // The complete was entered AFTER the reject (real time) but its manual date is
+  // days earlier — the feed must stay in real entry order (tamper-evident).
+  const feed = mergeActivity({
+    cutting: { created_at: '2026-06-01T10:00:00Z', by: 'cutter1', total_pieces: 100, manual_date: '2026-05-30' },
+    stageEvents: {
+      stitching: [
+        { event_type: 'approve', pieces: 100, created_at: '2026-06-03T09:00:00Z', username: 'a' },
+        { event_type: 'reject', pieces: 5, created_at: '2026-06-05T09:00:00Z', username: 'a' },
+        { event_type: 'complete', pieces: 95, created_at: '2026-06-08T09:00:00Z', username: 'a', manual_date: '2026-06-04' },
+      ],
+    },
+  });
+  assert.deepStrictEqual(feed.map(f => f.kind), ['created', 'approve', 'reject', 'complete']);
+  assert.strictEqual(feed[0].manual_date, '2026-05-30');
+  assert.strictEqual(feed[1].manual_date, null);
+  assert.strictEqual(feed[3].manual_date, '2026-06-04');
+});
