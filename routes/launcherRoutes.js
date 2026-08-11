@@ -37,6 +37,7 @@ const ROLE_META = {
   finishing:            { label: 'Finishing',              icon: 'check2-square',  desc: 'Finishing + dispatch' },
   catalogUpload:        { label: 'Catalog Upload',         icon: 'cloud-upload',   desc: 'Bulk product uploads' },
   supervisor:           { label: 'Supervisor',             icon: 'people-fill',    desc: 'Employee management' },
+  lotviewers:           { label: 'Lot Viewer',             icon: 'eye-fill',       desc: 'Read-only lot flow, sizes & stages' },
   store_admin:          { label: 'Store Admin',            icon: 'shop-window',    desc: 'Store administration' },
   store_employee:       { label: 'Store',                  icon: 'shop',           desc: 'Inventory entry' },
   indent_filler:        { label: 'Indents',                icon: 'card-list',      desc: 'Submit indents' },

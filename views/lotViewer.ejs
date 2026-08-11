@@ -1,0 +1,248 @@
+<%- include('partials/floorHead', {
+  pageTitle: 'Lot View',
+  topTitle: 'LOT VIEW',
+  topIcon: 'travel_explore',
+  topEyebrow: 'KOTTY',
+  topSub: user && user.username ? ('Hi, ' + user.username) : '',
+  user: user
+}) %>
+
+<main class="pt-20 pb-10 px-4 max-w-2xl mx-auto">
+
+  <!-- HOME: search + recent lots -->
+  <section id="homeView">
+    <form id="searchForm" class="sticky top-16 z-40 bg-surface pt-3 pb-3">
+      <div class="flex gap-2">
+        <input id="q" type="search" inputmode="search" autocomplete="off"
+               placeholder="Lot no / manual lot no / SKU"
+               class="flex-1 rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-3 text-base shadow-sm focus:ring-primary" />
+        <button class="rounded-xl bg-primary text-on-primary px-4 font-semibold action-card" type="submit" aria-label="Search">
+          <span class="material-symbols-outlined">search</span>
+        </button>
+      </div>
+    </form>
+    <h2 class="font-headline text-xs uppercase tracking-widest text-on-surface-variant mt-1 mb-2">Recent lots</h2>
+    <div id="recentList" class="space-y-2">
+      <div class="text-on-surface-variant text-sm py-6 text-center">Loading…</div>
+    </div>
+  </section>
+
+  <!-- DETAIL -->
+  <section id="detailView" class="hidden">
+    <button id="backBtn" class="mb-3 flex items-center gap-1 text-primary font-semibold action-card">
+      <span class="material-symbols-outlined">arrow_back</span> All lots
+    </button>
+    <div id="identityCard"></div>
+    <div id="stageStepper" class="mt-4"></div>
+    <h3 class="font-headline text-xs uppercase tracking-widest text-on-surface-variant mt-6 mb-2">Sizes</h3>
+    <div class="overflow-x-auto no-scrollbar rounded-xl bg-surface-container-lowest shadow-sm border border-outline-variant">
+      <table id="sizeMatrix" class="min-w-full text-sm"></table>
+    </div>
+    <h3 class="font-headline text-xs uppercase tracking-widest text-on-surface-variant mt-6 mb-2">Dispatch</h3>
+    <div id="dispatchCard"></div>
+    <h3 class="font-headline text-xs uppercase tracking-widest text-on-surface-variant mt-6 mb-2">Activity</h3>
+    <div id="activityFeed" class="space-y-1.5 pb-safe"></div>
+  </section>
+
+  <div id="emptyState" class="hidden text-center py-12 text-on-surface-variant"></div>
+</main>
+
+<script>
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '—';
+const fmtWhen = d => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }) : '—';
+const fmt = n => Number(n || 0).toLocaleString('en-IN');
+
+const STAGE_LABEL = {
+  cutting: 'Cutting', stitching: 'Stitching', jeans_assembly: 'Assembly',
+  washing: 'Washing', washing_in: 'Wash-In', finishing: 'Finishing',
+  dispatch: 'Dispatch', admin: 'Admin',
+};
+const STAGE_SHORT = {
+  stitching: 'Stitch', jeans_assembly: 'Asm', washing: 'Wash',
+  washing_in: 'W-In', finishing: 'Fin',
+};
+
+const el = id => document.getElementById(id);
+function show(state) { // 'home' | 'detail' | 'empty'
+  el('homeView').classList.toggle('hidden', state !== 'home');
+  el('detailView').classList.toggle('hidden', state !== 'detail');
+  el('emptyState').classList.toggle('hidden', state !== 'empty');
+}
+
+const flowChip = f => f === 'denim'
+  ? '<span class="text-[10px] uppercase font-bold tracking-wider bg-primary-container text-primary px-2 py-0.5 rounded-full">Denim</span>'
+  : '<span class="text-[10px] uppercase font-bold tracking-wider bg-tertiary-container text-tertiary px-2 py-0.5 rounded-full">Hosiery</span>';
+
+// ── Home ────────────────────────────────────────────────────────────────────
+async function loadRecent() {
+  try {
+    const r = await fetch('/lot-view/recent', { headers: { 'Accept': 'application/json' } });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'failed');
+    el('recentList').innerHTML = j.lots.map(l => `
+      <button class="w-full text-left bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm px-4 py-3 action-card"
+              onclick="openLot('${esc(l.lot_no).replace(/'/g, '&#39;')}')">
+        <div class="flex items-center justify-between gap-2">
+          <span class="font-headline font-bold text-base truncate">${esc(l.lot_no)}${l.manual_lot_number ? ' <span class="text-on-surface-variant font-body font-medium text-sm">· ' + esc(l.manual_lot_number) + '</span>' : ''}</span>
+          ${flowChip(l.flow_type)}
+        </div>
+        <div class="flex items-center justify-between mt-1 text-sm text-on-surface-variant">
+          <span class="truncate">${esc(l.sku)}</span>
+          <span class="shrink-0 ml-2">${fmt(l.total_pieces)} pcs</span>
+        </div>
+        <div class="flex items-center justify-between mt-1.5">
+          <span class="text-[11px] uppercase font-bold tracking-wider bg-secondary-container text-secondary px-2 py-0.5 rounded-full">${esc(STAGE_LABEL[l.current_stage] || l.current_stage)}</span>
+          <span class="text-xs text-on-surface-variant">${fmtDate(l.created_at)}</span>
+        </div>
+      </button>`).join('') ||
+      '<div class="text-on-surface-variant text-sm py-6 text-center">No lots yet.</div>';
+  } catch (e) {
+    el('recentList').innerHTML = '<div class="text-error text-sm py-6 text-center">Could not load recent lots. Pull to refresh.</div>';
+  }
+}
+
+// ── Detail ──────────────────────────────────────────────────────────────────
+function renderIdentity(lot) {
+  el('identityCard').innerHTML = `
+    <div class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm px-4 py-3">
+      <div class="flex items-center justify-between gap-2">
+        <span class="font-headline font-black text-xl">${esc(lot.lot_no)}</span>
+        ${flowChip(lot.flow_type)}
+      </div>
+      ${lot.manual_lot_number ? `<div class="text-sm text-on-surface-variant mt-0.5">Manual lot: <strong class="text-on-surface">${esc(lot.manual_lot_number)}</strong></div>` : ''}
+      <div class="text-sm text-on-surface-variant mt-0.5">${esc(lot.sku)}</div>
+      <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm">
+        <span><strong>${fmt(lot.total_pieces)}</strong> pcs cut</span>
+        <span>by <strong>${esc(lot.cutter || '—')}</strong></span>
+        <span>${fmtDate(lot.created_at)}</span>
+      </div>
+      ${lot.remark ? `<div class="text-xs text-on-surface-variant mt-2 border-t border-outline-variant pt-2">${esc(lot.remark)}</div>` : ''}
+    </div>`;
+}
+
+function renderStepper(timeline) {
+  const dot = t => t.status === 'done'
+    ? '<span class="w-3.5 h-3.5 rounded-full bg-secondary ring-4 ring-secondary-container shrink-0"></span>'
+    : t.status === 'in_progress'
+      ? '<span class="w-3.5 h-3.5 rounded-full bg-primary ring-4 ring-primary-container shrink-0 animate-pulse"></span>'
+      : '<span class="w-3.5 h-3.5 rounded-full bg-outline-variant ring-4 ring-surface shrink-0"></span>';
+  el('stageStepper').innerHTML = `
+    <div class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm px-4 py-1">
+      ${timeline.map((t, i) => `
+        <div class="flex gap-3 py-3 ${i < timeline.length - 1 ? 'border-b border-outline-variant' : ''}">
+          <div class="flex flex-col items-center pt-1">${dot(t)}</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-semibold">${esc(t.label)}</span>
+              <span class="text-xs ${t.overdue ? 'text-error font-bold' : 'text-on-surface-variant'}">
+                ${t.days != null ? t.days + 'd' + (t.status === 'in_progress' ? ' ongoing' : '') : '—'}${t.overdue ? ' · OVERDUE' : ''}
+              </span>
+            </div>
+            <div class="text-sm text-on-surface-variant truncate">${t.master ? 'Master: ' + esc(t.master) : (t.status === 'not_started' ? 'Not started' : '')}</div>
+            ${t.pieces && t.status !== 'not_started' ? `
+              <div class="flex gap-3 mt-1 text-xs text-on-surface-variant">
+                <span>Taken <strong class="text-on-surface">${fmt(t.pieces.approved)}</strong></span>
+                <span>Done <strong class="text-on-surface">${fmt(t.pieces.completed)}</strong></span>
+                ${Number(t.pieces.rejected) ? `<span class="text-error">Rejected <strong>${fmt(t.pieces.rejected)}</strong></span>` : ''}
+              </div>` : ''}
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+function renderSizeMatrix(m) {
+  if (!m || !m.rows.length) { el('sizeMatrix').innerHTML = '<tr><td class="px-4 py-3 text-on-surface-variant">No size data.</td></tr>'; return; }
+  const th = 'px-3 py-2 text-left font-semibold text-xs uppercase tracking-wide text-on-surface-variant whitespace-nowrap';
+  const td = 'px-3 py-2 whitespace-nowrap';
+  const head = `<tr class="border-b border-outline-variant">
+    <th class="${th} sticky left-0 bg-surface-container-lowest">Size</th>
+    <th class="${th}">Cut</th>
+    ${m.stages.map(s => `<th class="${th}">${esc(STAGE_SHORT[s] || s)}<br/><span class="normal-case font-normal">Taken · Done</span></th>`).join('')}
+    <th class="${th}">Disp</th></tr>`;
+  const row = (r, bold) => `<tr class="${bold ? 'font-bold border-t border-outline-variant' : 'border-t border-outline-variant/60'}">
+    <td class="${td} sticky left-0 bg-surface-container-lowest font-semibold">${esc(r.size ?? 'Total')}</td>
+    <td class="${td}">${fmt(r.cut)}</td>
+    ${m.stages.map(s => `<td class="${td}">${fmt(r.byStage[s].approved)} · ${fmt(r.byStage[s].completed)}</td>`).join('')}
+    <td class="${td}">${fmt(r.dispatched)}</td></tr>`;
+  el('sizeMatrix').innerHTML = head + m.rows.map(r => row(r, false)).join('') + row(m.totals, true);
+}
+
+function renderDispatch(d) {
+  const rem = Number(d.remaining) || 0;
+  el('dispatchCard').innerHTML = `
+    <div class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm px-4 py-3">
+      <div class="grid grid-cols-3 gap-2 text-center">
+        <div><div class="font-headline font-black text-xl">${fmt(d.totalFinished)}</div><div class="text-xs text-on-surface-variant">Finished</div></div>
+        <div><div class="font-headline font-black text-xl text-secondary">${fmt(d.totalDispatched)}</div><div class="text-xs text-on-surface-variant">Dispatched</div></div>
+        <div><div class="font-headline font-black text-xl ${rem > 0 ? 'text-error' : ''}">${fmt(rem)}</div><div class="text-xs text-on-surface-variant">Remaining</div></div>
+      </div>
+      ${d.destinations && d.destinations.length ? `
+        <div class="flex flex-wrap gap-1.5 mt-3 border-t border-outline-variant pt-2.5">
+          ${d.destinations.map(x => `<span class="text-[11px] font-bold bg-primary-container text-primary px-2 py-0.5 rounded-full">${esc(x)}</span>`).join('')}
+        </div>` : ''}
+    </div>`;
+}
+
+function renderActivity(activity) {
+  if (!activity.length) { el('activityFeed').innerHTML = '<div class="text-on-surface-variant text-sm">No updates recorded.</div>'; return; }
+  el('activityFeed').innerHTML = activity.map(a => `
+    <div class="bg-surface-container-lowest rounded-lg border border-outline-variant px-3 py-2 text-sm">
+      <div class="flex items-center justify-between gap-2">
+        <span class="font-semibold">${esc(a.label)}</span>
+        <span class="text-xs text-on-surface-variant shrink-0">${fmtWhen(a.when)}</span>
+      </div>
+      <div class="flex items-center flex-wrap gap-x-2 text-xs text-on-surface-variant mt-0.5">
+        <span class="uppercase font-bold tracking-wide">${esc(STAGE_LABEL[a.stage] || a.stage)}</span>
+        ${a.pieces != null ? `<span>${fmt(a.pieces)} pcs</span>` : ''}
+        ${a.by ? `<span>by ${esc(a.by)}</span>` : ''}
+        ${a.manual_date ? `<span class="text-primary" title="Actual work date entered by the master">(manual: ${fmtDate(a.manual_date)})</span>` : ''}
+      </div>
+      ${a.note ? `<div class="text-xs text-on-surface-variant mt-0.5">${esc(a.note.length > 200 ? a.note.slice(0, 200) + '…' : a.note)}</div>` : ''}
+    </div>`).join('');
+}
+
+async function openLot(q) {
+  show('empty');
+  el('emptyState').textContent = 'Loading…';
+  try {
+    const r = await fetch('/lot-view/data?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'failed');
+    if (!j.journey) {
+      el('emptyState').innerHTML = 'No lot found for "<strong>' + esc(q) + '</strong>".<br/><button class="mt-4 text-primary font-semibold" onclick="goHome()">Back to all lots</button>';
+      return;
+    }
+    renderIdentity(j.journey.lot);
+    renderStepper(j.journey.timeline);
+    renderSizeMatrix(j.sizeMatrix);
+    renderDispatch(j.journey.dispatch);
+    renderActivity(j.journey.activity);
+    history.replaceState(null, '', '/lot-view?q=' + encodeURIComponent(j.journey.lot.lot_no));
+    show('detail');
+    window.scrollTo(0, 0);
+  } catch (e) {
+    el('emptyState').innerHTML = 'Could not load lot: ' + esc(e.message) + '<br/><button class="mt-4 text-primary font-semibold" onclick="goHome()">Back to all lots</button>';
+  }
+}
+
+function goHome() {
+  history.replaceState(null, '', '/lot-view');
+  show('home');
+}
+
+el('backBtn').addEventListener('click', goHome);
+el('searchForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const q = el('q').value.trim();
+  if (q) openLot(q);
+});
+
+(function init() {
+  const q = new URLSearchParams(location.search).get('q');
+  loadRecent();
+  if (q && q.trim()) openLot(q.trim());
+})();
+</script>
+</body>
+</html>
