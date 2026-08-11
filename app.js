@@ -262,6 +262,7 @@ app.use('/', launcherRoutes);                       // /launcher + /switch-role
 app.use('/my-lots', require('./routes/myLotsRoutes'));
 app.use('/operator/lot-tat', require('./routes/operatorLotTatRoutes'));
 app.use('/operator/lot-journey', require('./routes/lotJourneyRoutes'));
+app.use('/lot-view', require('./routes/lotViewerRoutes'));  // lotviewers role (read-only)
 app.use('/operator/ai', require('./routes/aiAnalystRoutes'));
 app.use('/operator/lot-admin', require('./routes/lotAdminRoutes'));
 app.use('/admin/user-roles', adminUserRolesRoutes); // mohitOperator-only
