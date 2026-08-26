@@ -21,7 +21,7 @@ const stageEvents = require('../utils/stageEvents');
 const { orderedStages, deriveStageStatus, dispatchSummary, currentStage } = require('../utils/lotJourney');
 const { cutPrioritySummary, fabricNeededByType, wipByStage } = require('../utils/pmAnalytics');
 const { computeStyleTrend } = require('../utils/styleTrend');
-const { buildPicSizeRows, buildPicSizeWorkbook, deriveLotStyle } = require('../utils/picSizeReport');
+const { buildPicSizeRows, writePicSizeCsv, deriveLotStyle } = require('../utils/picSizeReport');
 let pullWorker = null;
 try { pullWorker = require('../utils/easyecomPullWorker'); } catch (_) { pullWorker = null; }
 
@@ -200,12 +200,10 @@ router.get('/reports/pic-size', async (req, res) => {
     const startDate = String(req.query.startDate || '').trim();
     const endDate = String(req.query.endDate || '').trim();
     const rows = await buildPicSizeRows({ inProductionOnly: true, style, startDate, endDate });
-    const workbook = buildPicSizeWorkbook(rows);
     const safeStyle = (style || 'AllStyles').replace(/[^A-Za-z0-9._-]/g, '_');
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="PICReport-InProduction-${safeStyle}-BySize.xlsx"`);
-    await workbook.xlsx.write(res);
-    res.end();
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="PICReport-InProduction-${safeStyle}-BySize.csv"`);
+    writePicSizeCsv(res, rows);
   } catch (err) {
     console.error('[pm] /reports/pic-size failed:', err);
     res.status(500).send('Failed to build in-production report');

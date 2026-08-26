@@ -29,6 +29,25 @@ function fnv1a(str) {
   return h.toString(36);
 }
 
+// Large `WHERE lot_no IN (?)` lists (thousands of values, e.g. an 8-month
+// download) degrade badly in MySQL regardless of indexing. Batch into fixed-
+// size chunks, run the batches concurrently, and merge — also gives the
+// per-batch cache below a real chance at hits across overlapping requests,
+// where hashing the whole varying list almost never did.
+const LOT_CHUNK_SIZE = 500;
+function chunkLotNos(lotNos, size = LOT_CHUNK_SIZE) {
+  if (lotNos.length <= size) return [lotNos];
+  const chunks = [];
+  for (let i = 0; i < lotNos.length; i += size) chunks.push(lotNos.slice(i, i + size));
+  return chunks;
+}
+
+// Run a `WHERE lot_no IN (?)` row-returning query per chunk and concatenate.
+async function queryRowsInChunks(lotNos, runBatch) {
+  const batches = await Promise.all(chunkLotNos(lotNos).map(runBatch));
+  return batches.flat();
+}
+
 // YYYY-MM-DD in IST — toISOString() is UTC and flips to "yesterday" between
 // 00:00 and 05:30 IST, hiding same-day lots from default date windows.
 function istDateString(d = new Date()) {
@@ -405,12 +424,7 @@ const PIC_REPORT_V2_COLUMNS = [
 //   stage (is_approved=1, assigned_on=approved_on=latest approve ts,
 //   opName=latest approver username). null when no approve event yet.
 // ---------------------------------------------------------------------------
-async function fetchLotEventAggregates(lotNos = []) {
-  if (!lotNos.length) {
-    return {
-      lotSumsMap: {}, stitchMap: {}, asmMap: {}, washMap: {}, winMap: {}, finMap: {}
-    };
-  }
+async function fetchLotEventAggregatesBatch(lotNos) {
   const sorted = lotNos.slice().sort();
   const cacheKey = `lotAggEv-${sorted.length}-${fnv1a(sorted.join(','))}`;
   return cache.fetchCached(cacheKey, async () => {
@@ -526,9 +540,25 @@ async function fetchLotEventAggregates(lotNos = []) {
   });
 }
 
+async function fetchLotEventAggregates(lotNos = []) {
+  if (!lotNos.length) {
+    return {
+      lotSumsMap: {}, stitchMap: {}, asmMap: {}, washMap: {}, winMap: {}, finMap: {}
+    };
+  }
+  const batches = await Promise.all(chunkLotNos(lotNos).map(fetchLotEventAggregatesBatch));
+  return {
+    lotSumsMap: Object.assign({}, ...batches.map(b => b.lotSumsMap)),
+    stitchMap:  Object.assign({}, ...batches.map(b => b.stitchMap)),
+    asmMap:     Object.assign({}, ...batches.map(b => b.asmMap)),
+    washMap:    Object.assign({}, ...batches.map(b => b.washMap)),
+    winMap:     Object.assign({}, ...batches.map(b => b.winMap)),
+    finMap:     Object.assign({}, ...batches.map(b => b.finMap)),
+  };
+}
+
 // Per-(lot, size) completed pieces by stage, from *_event_sizes.
-async function fetchLotSizeEventSums(lotNos = []) {
-  if (!lotNos.length) return {};
+async function fetchLotSizeEventSumsBatch(lotNos) {
   const sorted = lotNos.slice().sort();
   const cacheKey = `lotSizeEv-${sorted.length}-${fnv1a(sorted.join(','))}`;
   return cache.fetchCached(cacheKey, async () => {
@@ -571,6 +601,12 @@ async function fetchLotSizeEventSums(lotNos = []) {
     }
     return map;
   });
+}
+
+async function fetchLotSizeEventSums(lotNos = []) {
+  if (!lotNos.length) return {};
+  const batches = await Promise.all(chunkLotNos(lotNos).map(fetchLotSizeEventSumsBatch));
+  return Object.assign({}, ...batches);
 }
 
 /**
@@ -1162,13 +1198,16 @@ async function buildPicSizeRows({
 
   const sizeEventSums = await fetchLotSizeEventSums(lotNos);
 
-  const [dispatchRows] = await pool.query(`
-    SELECT fdp.lot_no, fdp.size_label,
-           COALESCE(SUM(fdp.quantity),0) AS dispatchedQty,
-           GROUP_CONCAT(DISTINCT fdp.destination ORDER BY fdp.sent_at DESC SEPARATOR ', ') AS destinations
-      FROM finishing_dispatches fdp
-     WHERE fdp.lot_no IN (?)
-     GROUP BY fdp.lot_no, fdp.size_label`, [lotNos]);
+  const dispatchRows = await queryRowsInChunks(lotNos, async (batch) => {
+    const [batchRows] = await pool.query(`
+      SELECT fdp.lot_no, fdp.size_label,
+             COALESCE(SUM(fdp.quantity),0) AS dispatchedQty,
+             GROUP_CONCAT(DISTINCT fdp.destination ORDER BY fdp.sent_at DESC SEPARATOR ', ') AS destinations
+        FROM finishing_dispatches fdp
+       WHERE fdp.lot_no IN (?)
+       GROUP BY fdp.lot_no, fdp.size_label`, [batch]);
+    return batchRows;
+  });
   const dispatchMap = {};
   for (const d of dispatchRows) {
     dispatchMap[`${d.lot_no}|${d.size_label}`] = {
@@ -1188,14 +1227,17 @@ async function buildPicSizeRows({
 
   const { stitchMap, asmMap, washMap, winMap, finMap } = await fetchLotEventAggregates(lotNos);
 
-  const [rewashRows2] = await pool.query(
-    `SELECT lot_no,
-            SUM(total_requested) AS requestedQty,
-            SUM(CASE WHEN status='pending'   THEN total_requested ELSE 0 END) AS pendingQty,
-            SUM(CASE WHEN status='completed' THEN total_requested ELSE 0 END) AS completedQty
-       FROM rewash_requests
-      WHERE lot_no IN (?)
-      GROUP BY lot_no`, [lotNos]);
+  const rewashRows2 = await queryRowsInChunks(lotNos, async (batch) => {
+    const [batchRows] = await pool.query(
+      `SELECT lot_no,
+              SUM(total_requested) AS requestedQty,
+              SUM(CASE WHEN status='pending'   THEN total_requested ELSE 0 END) AS pendingQty,
+              SUM(CASE WHEN status='completed' THEN total_requested ELSE 0 END) AS completedQty
+         FROM rewash_requests
+        WHERE lot_no IN (?)
+        GROUP BY lot_no`, [batch]);
+    return batchRows;
+  });
   const rewashMap = {};
   for (const r of rewashRows2) {
     rewashMap[r.lot_no] = {
@@ -1205,14 +1247,17 @@ async function buildPicSizeRows({
     };
   }
 
-  const [sizeRejectRows] = await pool.query(
-    `SELECT rd.lot_no, rd.stage, rds.size_label,
-            COALESCE(SUM(rds.pieces),0) AS pieces,
-            GROUP_CONCAT(DISTINCT NULLIF(rd.reason,'') ORDER BY rd.reason SEPARATOR '; ') AS reasons
-       FROM reject_data rd
-       JOIN reject_data_sizes rds ON rds.reject_data_id = rd.id
-      WHERE rd.lot_no IN (?)
-      GROUP BY rd.lot_no, rd.stage, rds.size_label`, [lotNos]);
+  const sizeRejectRows = await queryRowsInChunks(lotNos, async (batch) => {
+    const [batchRows] = await pool.query(
+      `SELECT rd.lot_no, rd.stage, rds.size_label,
+              COALESCE(SUM(rds.pieces),0) AS pieces,
+              GROUP_CONCAT(DISTINCT NULLIF(rd.reason,'') ORDER BY rd.reason SEPARATOR '; ') AS reasons
+         FROM reject_data rd
+         JOIN reject_data_sizes rds ON rds.reject_data_id = rd.id
+        WHERE rd.lot_no IN (?)
+        GROUP BY rd.lot_no, rd.stage, rds.size_label`, [batch]);
+    return batchRows;
+  });
   const rejectSizeMap = {};
   for (const r of sizeRejectRows) {
     const key = `${r.lot_no}|${r.size_label}`;
@@ -1317,13 +1362,9 @@ async function buildPicSizeRows({
   return finalData;
 }
 
-// Build the PIC-Size workbook from finalData. Column set is identical to the
-// operator size route (shared PIC_REPORT_V2_COLUMNS + Size + dispatch columns).
-function buildPicSizeWorkbook(finalData) {
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'PIC Size Report v2';
-  const sheet = workbook.addWorksheet('PIC-Size-Report');
-
+// Column set shared by the xlsx and CSV builders — identical to the operator
+// size route (PIC_REPORT_V2_COLUMNS stage columns + Size/SKU_Size/dispatch).
+function getPicSizeReportColumns() {
   const sizeCols = [
     { header: 'Lot No',              key: 'lotNo',             width: 14 },
     { header: 'Manual Lot No',       key: 'externalLotNo',     width: 14 },
@@ -1354,12 +1395,44 @@ function buildPicSizeWorkbook(finalData) {
   }
   sizeCols.push({ header: 'Dispatched Qty',       key: 'dispatchedQty', width: 12 });
   sizeCols.push({ header: 'Dispatch Destination', key: 'destinations',  width: 26 });
+  return sizeCols;
+}
+
+// Build the PIC-Size workbook from finalData. Column set is identical to the
+// operator size route (shared PIC_REPORT_V2_COLUMNS + Size + dispatch columns).
+function buildPicSizeWorkbook(finalData) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'PIC Size Report v2';
+  const sheet = workbook.addWorksheet('PIC-Size-Report');
+  const sizeCols = getPicSizeReportColumns();
   sheet.columns = sizeCols;
 
   for (const r of finalData) sheet.addRow(r);
   sheet.getRow(1).font = { bold: true };
   sheet.views = [{ state: 'frozen', xSplit: 6, ySplit: 1 }];
   return workbook;
+}
+
+// One CSV field, quoted only when it needs to be (contains a comma, quote,
+// CR or LF) — keeps the common case (plain numbers/short strings) cheap.
+function csvField(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+// Stream the PIC-Size CSV straight to an HTTP response — no in-memory
+// workbook object, no giant string built up front. Cheaper per row than
+// exceljs (which allocates a styled cell object per cell) and lets bytes
+// start flowing to the client immediately instead of only after every row
+// has been formatted.
+function writePicSizeCsv(res, finalData) {
+  const cols = getPicSizeReportColumns();
+  res.write(cols.map((c) => csvField(c.header)).join(',') + '\r\n');
+  for (const r of finalData) {
+    res.write(cols.map((c) => csvField(r[c.key])).join(',') + '\r\n');
+  }
+  res.end();
 }
 
 module.exports = {
@@ -1379,4 +1452,6 @@ module.exports = {
   filterByDept,
   buildPicSizeRows,
   buildPicSizeWorkbook,
+  getPicSizeReportColumns,
+  writePicSizeCsv,
 };

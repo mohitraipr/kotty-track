@@ -986,7 +986,7 @@ const {
   getDepartmentStatuses,
   filterByDept,
   buildPicSizeRows,
-  buildPicSizeWorkbook,
+  writePicSizeCsv,
   istDateString,
 } = require("../utils/picSizeReport");
 
@@ -1303,17 +1303,16 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
       if (!finalData.length) {
         return res.status(200).send("No data to download");
       }
-      const workbook = buildPicSizeWorkbook(finalData);
-      res.setHeader(
-        "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      );
+      // CSV instead of xlsx: exceljs allocates a styled cell object per cell
+      // before anything can be sent; writePicSizeCsv streams plain rows to
+      // the response as they're formatted, which matters once a range spans
+      // months and thousands of rows.
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
       res.setHeader(
         "Content-Disposition",
-        'attachment; filename="PICReport-BySize.xlsx"'
+        'attachment; filename="PICReport-BySize.csv"'
       );
-      await workbook.xlsx.write(res);
-      res.end();
+      writePicSizeCsv(res, finalData);
     } else {
       return res.render("operatorSizeReport", {
         user: req.session.user,
