@@ -131,6 +131,7 @@
               <th>Cut</th>
               <th>Current Stage</th>
               <th>Pending</th>
+              <th>Final Status</th>
               <th>Stitch</th>
               <th>Assembly</th>
               <th>Washing</th>
@@ -157,6 +158,7 @@
                 <% } %>
               </td>
               <td><strong><%= row.currentPendingQty || 0 %></strong></td>
+              <td><small><%= row.finalStatus || '—' %></small></td>
               <td>
                 <%- statusBadge(row.stitchStatus) %><br>
                 <small class="text-muted">

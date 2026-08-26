@@ -215,6 +215,15 @@ function buildEnhancedRow({
     break;
   }
 
+  // One-glance summary of every stage this lot actually flows through (N/A
+  // stages for hosiery — assembly/washing/wash-in — are already excluded from
+  // `chain`). Pending qty is appended per stage since "Completed" alone reads
+  // as done even when the completed pieces are just sitting unpicked-up by
+  // the next stage (see: lot 736MM, stitching complete but 1,576 pending).
+  const finalStatus = chain
+    .map(([name, info]) => info.pending > 0 ? `${name}: ${info.status} (${info.pending} pending)` : `${name}: ${info.status}`)
+    .join(', ');
+
   const { externalLotNo: parsedExternalLotNo, sortNo } = parseLotRemark(lot.remark);
   // Prefer the authoritative, backfilled manual_lot_number column; fall back to
   // the value parsed live from the remark for any lot not yet backfilled.
@@ -245,6 +254,7 @@ function buildEnhancedRow({
     currentStage,
     currentPendingQty: currentPending,
     daysInStage: daysSince(stageStartTs),
+    finalStatus,
 
     // stitching
     stitchOp:        opName(stAssign),
@@ -339,6 +349,7 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Current Stage',       key: 'currentStage',      width: 14 },
   { header: 'Current Pending Qty', key: 'currentPendingQty', width: 12 },
   { header: 'Days In Stage',       key: 'daysInStage',       width: 10 },
+  { header: 'Final Status',        key: 'finalStatus',       width: 50 },
   { header: 'Remark',              key: 'remark',            width: 26 },
 
   { header: 'Stitch Operator',     key: 'stitchOp',          width: 14 },
@@ -1379,6 +1390,7 @@ function getPicSizeReportColumns() {
     { header: 'Current Stage',       key: 'currentStage',      width: 14 },
     { header: 'Current Pending Qty', key: 'currentPendingQty', width: 12 },
     { header: 'Days In Stage',       key: 'daysInStage',       width: 10 },
+    { header: 'Final Status',        key: 'finalStatus',       width: 50 },
     { header: 'Remark',              key: 'remark',            width: 26 },
   ];
   const stageColKeys = new Set([
