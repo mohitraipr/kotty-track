@@ -434,15 +434,22 @@ async function fetchLotEventAggregates(lotNos = []) {
       [lotNos, lotNos, lotNos, lotNos, lotNos]
     );
 
-    // Per-stage approve events, ordered so the first row per lot is the latest
-    // (latest by real entry time — manual_date only shifts the displayed date).
+    // Per-stage approve events — only the latest per lot is needed, so rank in
+    // SQL (ROW_NUMBER) instead of pulling every approve event ever and picking
+    // the first occurrence in JS. For lots with long approve histories over an
+    // unbounded/wide window this was the dominant cost (full scan + filesort +
+    // JS dedup across thousands of lots); ranking in SQL returns 1 row/lot.
     const opSql = (table) => `
-      SELECT cl.lot_no, e.created_at, e.manual_date, u.username AS opName, e.operator_id
-        FROM ${table} e
-        JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
-        JOIN users u ON u.id = e.operator_id
-       WHERE cl.lot_no IN (?) AND e.event_type = 'approve'
-       ORDER BY e.created_at DESC, e.id DESC
+      SELECT lot_no, created_at, manual_date, opName, operator_id
+        FROM (
+          SELECT cl.lot_no, e.created_at, e.manual_date, u.username AS opName, e.operator_id,
+                 ROW_NUMBER() OVER (PARTITION BY cl.lot_no ORDER BY e.created_at DESC, e.id DESC) AS rn
+            FROM ${table} e
+            JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+            JOIN users u ON u.id = e.operator_id
+           WHERE cl.lot_no IN (?) AND e.event_type = 'approve'
+        ) ranked
+       WHERE rn = 1
     `;
     const stApprovesQ  = pool.query(opSql('stitching_events'),       [lotNos]);
     const asmApprovesQ = pool.query(opSql('jeans_assembly_events'),  [lotNos]);
@@ -1111,6 +1118,24 @@ async function buildPicSizeRows({
       )`;
   }
 
+  // When inProductionOnly skips the date clause (full history), bound the scan
+  // at the SQL level instead of fetching every lot ever cut and filtering in
+  // the JS loop below — same "undispatched pieces remain" test as that loop
+  // (mirrors the finishing_dispatches SUM used to build dispatchMap further
+  // down), just applied via HAVING so MySQL never returns already-dispatched
+  // lots in the first place. Aggregated in a subquery (not a raw LEFT JOIN)
+  // to avoid fanning out cls.total_pieces across multiple dispatch rows.
+  const unboundedInProduction = inProductionOnly && !startDate && !endDate;
+  const dispatchJoin = unboundedInProduction ? `
+      LEFT JOIN (
+        SELECT lot_no, size_label, SUM(quantity) AS dispatched_qty
+          FROM finishing_dispatches
+         GROUP BY lot_no, size_label
+      ) fdp ON fdp.lot_no = cl.lot_no AND fdp.size_label = cls.size_label` : '';
+  const inProductionHaving = unboundedInProduction
+    ? 'HAVING SUM(cls.total_pieces) > COALESCE(MAX(fdp.dispatched_qty), 0)'
+    : '';
+
   const baseQuery = `
     SELECT cl.lot_no, cl.manual_lot_number, cl.sku, cl.fabric_type, cls.size_label,
            SUM(cls.total_pieces) AS total_pieces, cl.created_at, cl.remark, cl.flow_type,
@@ -1118,11 +1143,13 @@ async function buildPicSizeRows({
       FROM cutting_lots cl
       JOIN cutting_lot_sizes cls ON cls.cutting_lot_id = cl.id
       JOIN users u ON cl.user_id = u.id
+      ${dispatchJoin}
      WHERE 1=1
        ${lotTypeClause}
        ${dateWhere}
      GROUP BY cl.lot_no, cl.manual_lot_number, cl.sku, cl.fabric_type, cls.size_label,
               cl.created_at, cl.remark, cl.flow_type, u.username, u.is_denim_cutter
+     ${inProductionHaving}
      ORDER BY cl.created_at DESC
      LIMIT ${rowLimit}`;
   const [rows] = await pool.query(baseQuery, dateParams);

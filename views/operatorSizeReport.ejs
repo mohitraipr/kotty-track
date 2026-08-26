@@ -378,7 +378,13 @@
     document.getElementById('overlaySpinner').style.display = 'none';
   }
 
+  let downloadInFlight = false;
+
   async function downloadReport() {
+    if (downloadInFlight) return;
+    downloadInFlight = true;
+    const btn = document.querySelector('button[onclick="downloadReport()"]');
+    if (btn) btn.disabled = true;
     try {
       const form = document.getElementById('filterForm');
       const formData = new FormData(form);
@@ -407,6 +413,8 @@
       alert('Error downloading report: ' + err.message);
     } finally {
       hideSpinner();
+      downloadInFlight = false;
+      if (btn) btn.disabled = false;
     }
   }
 </script>
