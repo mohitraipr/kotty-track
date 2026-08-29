@@ -989,6 +989,8 @@ const {
   writePicSizeCsv,
   istDateString,
 } = require("../utils/picSizeReport");
+const { createOrReuseJob, getJob, fireSelfCall } = require("../utils/picReportJobs");
+const gcs = require("../utils/gcsClient");
 
 
 /** The final PIC Report route */
@@ -1323,6 +1325,80 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
   } catch (err) {
     console.error("Error in /dashboard/pic-size-report:", err);
     return res.status(500).send("Server error");
+  }
+});
+
+// Async job flow for the download button (see utils/picReportJobs.js): wide date
+// ranges can take minutes, which blocked the request above until Cloud Run's own
+// timeout killed it. The frontend now creates a job, polls it, and downloads
+// through this app once it's ready instead of holding one long-lived fetch() open.
+// Streams from GCS rather than a signed URL: the Cloud Run service account here
+// has no iam.serviceAccounts.signBlob grant (verified — signing fails), and
+// streaming through the app keeps the download behind the existing session auth
+// instead of a bearer-token link.
+router.post("/dashboard/pic-size-report/jobs", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const {
+      lotType = "all", department = "all", status = "all", dateFilter = "createdAt",
+    } = req.body || {};
+    let { startDate = "", endDate = "" } = req.body || {};
+    if (!startDate || !endDate) {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      endDate = istDateString();
+      startDate = istDateString(weekAgo);
+    }
+    const { id, reused } = await createOrReuseJob({
+      reportType: "operator_size",
+      params: { lotType, department, status, dateFilter, startDate, endDate },
+      userId: req.session.user && req.session.user.id,
+    });
+    if (!reused) fireSelfCall(id);
+    res.json({ jobId: id });
+  } catch (err) {
+    console.error("Error creating pic-size-report job:", err);
+    res.status(500).json({ error: "Failed to start report job" });
+  }
+});
+
+router.get("/dashboard/pic-size-report/jobs/:id", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const job = await getJob(req.params.id);
+    if (!job) return res.status(404).json({ error: "Job not found" });
+    if (job.status === "done") {
+      return res.json({
+        status: "done",
+        downloadUrl: `/operator/dashboard/pic-size-report/jobs/${job.id}/download`,
+        rowCount: job.row_count,
+      });
+    }
+    if (job.status === "failed") {
+      return res.json({ status: "failed", message: job.message || "Report generation failed" });
+    }
+    res.json({ status: job.status });
+  } catch (err) {
+    console.error("Error checking pic-size-report job:", err);
+    res.status(500).json({ error: "Failed to check job status" });
+  }
+});
+
+router.get("/dashboard/pic-size-report/jobs/:id/download", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const job = await getJob(req.params.id);
+    if (!job || job.status !== "done" || !job.gcs_key) {
+      return res.status(404).send("Report not ready or not found");
+    }
+    const obj = await gcs.getObject(job.gcs_key);
+    res.setHeader("Content-Type", obj.ContentType || "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${job.filename}"`);
+    obj.Body.on("error", (err) => {
+      console.error("Error streaming pic-size-report job download:", err);
+      if (!res.headersSent) res.status(500).end();
+    });
+    obj.Body.pipe(res);
+  } catch (err) {
+    console.error("Error downloading pic-size-report job:", err);
+    res.status(500).send("Failed to download report");
   }
 });
 

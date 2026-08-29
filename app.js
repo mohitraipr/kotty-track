@@ -250,6 +250,12 @@ app.use('/health', healthRoutes);
 const { catchupMiddleware, internalRunPullHandler } = require('./utils/catchupPull');
 app.post('/internal/run-pull', internalRunPullHandler);
 
+// Async PIC-size report jobs (same self-call pattern as the pull worker above):
+// the download route creates a job and fires this secret-gated endpoint, which
+// awaits the report build so Cloud Run keeps CPU allocated for the duration.
+const { internalRunJobHandler } = require('./utils/picReportJobs');
+app.post('/internal/run-pic-report-job', internalRunJobHandler);
+
 // QC-Capture extension ingestion — token-auth (no session). Mounted before catchupMiddleware
 // and the session-gated routes so any Cloud Run instance can serve it. See docs/plans/01.
 const qcExtensionRoutes = require('./routes/qcExtensionRoutes');

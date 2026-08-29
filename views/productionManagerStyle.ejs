@@ -9,7 +9,7 @@
     </div>
     <div class="actions">
       <a class="pm-btn" href="/pm/api/recommendations.csv?style=<%= encodeURIComponent(style) %>">Export CSV</a>
-      <a class="pm-btn" href="/pm/reports/pic-size?style=<%= encodeURIComponent(style) %>" title="Download the size-wise PIC report of this style's lots currently in production">Download in-production report</a>
+      <a class="pm-btn" href="#" id="picSizeDownloadBtn" onclick="downloadInProductionReport(); return false;" title="Download the size-wise PIC report of this style's lots currently in production">Download in-production report</a>
       <% if (typeof userRole !== 'undefined' && userRole === 'admin') { %><a class="pm-btn primary" href="/pm">Run pull</a><% } %>
     </div>
   </header>
@@ -405,6 +405,48 @@ function renderLot(idx) {
     </div>`;
 }
 loadLotHistory();
+
+// Async job flow (see utils/picReportJobs.js): a style with a long-lived, wide
+// in-production tail could take a while to build, so this queues the report
+// and polls it instead of holding one request open until Cloud Run times out.
+let picDownloadInFlight = false;
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+async function downloadInProductionReport() {
+  if (picDownloadInFlight) return;
+  picDownloadInFlight = true;
+  const btn = $('picSizeDownloadBtn');
+  const originalText = btn ? btn.textContent : '';
+  try {
+    const createResp = await fetch('/pm/reports/pic-size/jobs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ style: STYLE }),
+    });
+    if (!createResp.ok) throw new Error('Could not start report job');
+    const { jobId } = await createResp.json();
+
+    const startedAt = Date.now();
+    const MAX_WAIT_MS = 10 * 60 * 1000;
+    while (Date.now() - startedAt < MAX_WAIT_MS) {
+      if (btn) btn.textContent = 'Generating... ' + Math.round((Date.now() - startedAt) / 1000) + 's';
+      const pollResp = await fetch('/pm/reports/pic-size/jobs/' + jobId);
+      if (!pollResp.ok) throw new Error('Lost track of the report job');
+      const job = await pollResp.json();
+      if (job.status === 'done') {
+        window.location.href = job.downloadUrl;
+        return;
+      }
+      if (job.status === 'failed') throw new Error(job.message || 'Report generation failed');
+      await sleep(3000);
+    }
+    throw new Error('Report is taking unusually long — check back shortly.');
+  } catch (err) {
+    alert('Error downloading report: ' + err.message);
+  } finally {
+    picDownloadInFlight = false;
+    if (btn) btn.textContent = originalText;
+  }
+}
 </script>
 
 </body>

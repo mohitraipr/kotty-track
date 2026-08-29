@@ -247,7 +247,7 @@
   <div class="spinner-content">
     <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
     <h5>Generating Size Report</h5>
-    <p>Please wait...</p>
+    <p id="spinnerStatus">Please wait... this can take a few minutes for wide date ranges.</p>
   </div>
 </div>
 
@@ -381,36 +381,61 @@
   }
 
   let downloadInFlight = false;
+  const POLL_MS = 3000;
 
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // Wide date ranges can take minutes to generate. Instead of holding one long
+  // fetch() open (which Cloud Run's own timeout eventually kills — the "Server
+  // error"/"Failed to fetch" people were seeing), this queues a job and polls
+  // its status. A second click while one is already running reuses the same
+  // job server-side (see utils/picReportJobs.js), so re-clicking a slow report
+  // no longer stacks duplicate heavy queries.
   async function downloadReport() {
     if (downloadInFlight) return;
     downloadInFlight = true;
     const btn = document.querySelector('button[onclick="downloadReport()"]');
     if (btn) btn.disabled = true;
+    const statusEl = document.getElementById('spinnerStatus');
+    showSpinner();
     try {
       const form = document.getElementById('filterForm');
       const formData = new FormData(form);
-      const params = new URLSearchParams();
-
+      const body = {};
       for (const [key, val] of formData.entries()) {
-        if (val) params.append(key, val);
+        if (val) body[key] = val;
       }
-      params.set('download', '1');
 
-      showSpinner();
+      const createResp = await fetch('/operator/dashboard/pic-size-report/jobs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!createResp.ok) throw new Error('Could not start report job');
+      const { jobId } = await createResp.json();
 
-      const response = await fetch('/operator/dashboard/pic-size-report?' + params.toString());
-      if (!response.ok) throw new Error('Server error');
+      const startedAt = Date.now();
+      const MAX_WAIT_MS = 10 * 60 * 1000; // give up after 10 minutes rather than polling forever
+      while (Date.now() - startedAt < MAX_WAIT_MS) {
+        const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+        if (statusEl) statusEl.textContent = 'Generating report... ' + elapsedSec + 's elapsed. This can take a few minutes for wide date ranges.';
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'PICReport-BySize-' + new Date().toISOString().split('T')[0] + '.csv';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+        const pollResp = await fetch('/operator/dashboard/pic-size-report/jobs/' + jobId);
+        if (!pollResp.ok) throw new Error('Lost track of the report job');
+        const job = await pollResp.json();
+
+        if (job.status === 'done') {
+          window.location.href = job.downloadUrl;
+          return;
+        }
+        if (job.status === 'failed') {
+          throw new Error(job.message || 'Report generation failed');
+        }
+        await sleep(POLL_MS);
+      }
+      throw new Error('Report is taking unusually long — check back shortly, it may still finish in the background.');
     } catch (err) {
       alert('Error downloading report: ' + err.message);
     } finally {

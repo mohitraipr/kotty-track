@@ -22,6 +22,8 @@ const { orderedStages, deriveStageStatus, dispatchSummary, currentStage } = requ
 const { cutPrioritySummary, fabricNeededByType, wipByStage } = require('../utils/pmAnalytics');
 const { computeStyleTrend } = require('../utils/styleTrend');
 const { buildPicSizeRows, writePicSizeCsv, deriveLotStyle } = require('../utils/picSizeReport');
+const { createOrReuseJob, getJob, fireSelfCall } = require('../utils/picReportJobs');
+const gcs = require('../utils/gcsClient');
 let pullWorker = null;
 try { pullWorker = require('../utils/easyecomPullWorker'); } catch (_) { pullWorker = null; }
 
@@ -207,6 +209,70 @@ router.get('/reports/pic-size', async (req, res) => {
   } catch (err) {
     console.error('[pm] /reports/pic-size failed:', err);
     res.status(500).send('Failed to build in-production report');
+  }
+});
+
+// Async job flow (see utils/picReportJobs.js) — same reasoning as the operator
+// size report: an all-styles or long-lived style pull can take minutes, which
+// blocked the request above until Cloud Run's timeout killed it.
+router.post('/reports/pic-size/jobs', async (req, res) => {
+  try {
+    const style = String((req.body && req.body.style) || '').trim();
+    const startDate = String((req.body && req.body.startDate) || '').trim();
+    const endDate = String((req.body && req.body.endDate) || '').trim();
+    const { id, reused } = await createOrReuseJob({
+      reportType: 'pm_in_production',
+      params: { inProductionOnly: true, style, startDate, endDate },
+      userId: req.session.user && req.session.user.id,
+    });
+    if (!reused) fireSelfCall(id);
+    res.json({ jobId: id });
+  } catch (err) {
+    console.error('[pm] failed to create pic-size job:', err);
+    res.status(500).json({ error: 'Failed to start report job' });
+  }
+});
+
+router.get('/reports/pic-size/jobs/:id', async (req, res) => {
+  try {
+    const job = await getJob(req.params.id);
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    if (job.status === 'done') {
+      return res.json({
+        status: 'done',
+        downloadUrl: `/pm/reports/pic-size/jobs/${job.id}/download`,
+        rowCount: job.row_count,
+      });
+    }
+    if (job.status === 'failed') {
+      return res.json({ status: 'failed', message: job.message || 'Report generation failed' });
+    }
+    res.json({ status: job.status });
+  } catch (err) {
+    console.error('[pm] failed to check pic-size job:', err);
+    res.status(500).json({ error: 'Failed to check job status' });
+  }
+});
+
+// Streams from GCS rather than a signed URL (see the identical comment on the
+// operator route) — the Cloud Run service account has no signBlob grant.
+router.get('/reports/pic-size/jobs/:id/download', async (req, res) => {
+  try {
+    const job = await getJob(req.params.id);
+    if (!job || job.status !== 'done' || !job.gcs_key) {
+      return res.status(404).send('Report not ready or not found');
+    }
+    const obj = await gcs.getObject(job.gcs_key);
+    res.setHeader('Content-Type', obj.ContentType || 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${job.filename}"`);
+    obj.Body.on('error', (err) => {
+      console.error('[pm] error streaming pic-size job download:', err);
+      if (!res.headersSent) res.status(500).end();
+    });
+    obj.Body.pipe(res);
+  } catch (err) {
+    console.error('[pm] error downloading pic-size job:', err);
+    res.status(500).send('Failed to download report');
   }
 });
 
