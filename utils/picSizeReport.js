@@ -1440,6 +1440,11 @@ function csvField(v) {
 // has been formatted.
 function writePicSizeCsv(res, finalData) {
   const cols = getPicSizeReportColumns();
+  // UTF-8 BOM: Excel doesn't auto-detect UTF-8 for a BOM-less .csv and falls back
+  // to the system ANSI code page, garbling every non-ASCII byte — including the
+  // '—' em dash used throughout as the N/A placeholder (every hosiery lot's
+  // non-applicable stage columns), so this showed up on nearly every row.
+  res.write('﻿');
   res.write(cols.map((c) => csvField(c.header)).join(',') + '\r\n');
   for (const r of finalData) {
     res.write(cols.map((c) => csvField(r[c.key])).join(',') + '\r\n');
