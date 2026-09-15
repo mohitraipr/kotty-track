@@ -33,21 +33,54 @@
       "environment": [
         { "name": "NODE_ENV", "value": "production" },
         { "name": "PORT", "value": "8080" },
+
         { "name": "DB_HOST", "value": "kotty-track-mysql.c30mmkwm61us.ap-south-1.rds.amazonaws.com" },
         { "name": "DB_PORT", "value": "3306" },
         { "name": "DB_NAME", "value": "kotty_db" },
-        { "name": "DB_USER", "value": "admin" },
+        { "name": "DB_USER", "value": "kotty_user" },
+
         { "name": "AWS_REGION", "value": "ap-south-1" },
         { "name": "S3_BUCKET_NAME", "value": "kotty-track-uploads-720712808547" },
-        { "name": "SERVICE_BASE_URL", "value": "http://kotty-track-alb-1717649752.ap-south-1.elb.amazonaws.com" },
-        { "name": "PM_PULL_ENABLED", "value": "0" },
-        { "name": "DISABLE_CRON", "value": "1" },
+
+        { "name": "S3_BUCKET", "value": "kotty-video-uploads" },
+        { "name": "PRESIGN_TTL_SECONDS", "value": "259200" },
+
+        { "name": "SERVICE_BASE_URL", "value": "https://erpkotty.in" },
+
+        { "name": "ZOHO_DC", "value": "COM" },
+        { "name": "ZOHO_SENDER_EMAIL", "value": "ajio@kotty.in" },
+
+        { "name": "EASYECOM_EMAIL", "value": "mohit@kotty.in" },
+        { "name": "EASYECOM_DELHI_EMAIL", "value": "pankaj@kotty.in" },
+        { "name": "EASYECOM_PRIMARY_LOCATION_KEY", "value": "ne30265212961" },
+        { "name": "EASYECOM_LOCATION_KEY", "value": "ee30270084289" },
+        { "name": "EASYECOM_DELHI_LOCATION_KEY", "value": "en31088037124" },
+
+        { "name": "PM_PULL_ENABLED", "value": "1" },
+        { "name": "PM_CLOSED_LOOP", "value": "1" },
+        { "name": "EE_GRN_PUSH", "value": "1" },
+        { "name": "PM_PULL_RUN_DEADLINE_MS", "value": "3000000" },
+
         { "name": "NODE_OPTIONS", "value": "--max-old-space-size=1536" }
       ],
       "secrets": [
         { "name": "DB_PASSWORD", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/db-password-A6UYSc" },
         { "name": "SESSION_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/session-secret-nCdHgW" },
-        { "name": "PM_CRON_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/pm-cron-secret-Waj2Lp" }
+        { "name": "PM_CRON_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/pm-cron-secret-Waj2Lp" },
+
+        { "name": "ZOHO_CLIENT_ID", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/app-credentials-wlEFQZ:ZOHO_CLIENT_ID::" },
+        { "name": "ZOHO_CLIENT_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/app-credentials-wlEFQZ:ZOHO_CLIENT_SECRET::" },
+        { "name": "ZOHO_REFRESH_TOKEN", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/app-credentials-wlEFQZ:ZOHO_REFRESH_TOKEN::" },
+
+        { "name": "EASYECOM_PASSWORD", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/app-credentials-wlEFQZ:EASYECOM_PASSWORD::" },
+        { "name": "EASYECOM_DELHI_PASSWORD", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/app-credentials-wlEFQZ:EASYECOM_DELHI_PASSWORD::" },
+        { "name": "EASYECOM_API_KEY", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/app-credentials-wlEFQZ:EASYECOM_API_KEY::" },
+
+        { "name": "ANTHROPIC_API_KEY", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/app-credentials-wlEFQZ:ANTHROPIC_API_KEY::" },
+        { "name": "GEMINI_API_KEY", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/app-credentials-wlEFQZ:GEMINI_API_KEY::" },
+
+        { "name": "VMS_AWS_ACCESS_KEY_ID", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/app-credentials-wlEFQZ:VMS_AWS_ACCESS_KEY_ID::" },
+        { "name": "VMS_AWS_SECRET_ACCESS_KEY", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/app-credentials-wlEFQZ:VMS_AWS_SECRET_ACCESS_KEY::" }
       ]
     }
   ]

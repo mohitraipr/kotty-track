@@ -12,10 +12,21 @@ const S3_BUCKET = process.env.S3_BUCKET || '';
 const S3_PREFIX = process.env.S3_PREFIX || '';
 const PRESIGN_TTL_SECONDS = parseInt(process.env.PRESIGN_TTL_SECONDS || '259200', 10); // 3 days
 
-// Create S3 client (credentials from environment: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+// This bucket lives in a DIFFERENT AWS account from the one the app now runs in,
+// so it needs its own explicit credentials (VMS_AWS_*). They must NOT be exported
+// as the generic AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY: on ECS those would take
+// precedence over the task role for every SDK client in the process, including
+// utils/awsStorageClient.js, which needs the task role to reach the app's own
+// bucket in the account we run in. Falls back to the default credential chain so
+// local dev / any legacy env still works.
+const vmsAccessKeyId = process.env.VMS_AWS_ACCESS_KEY_ID;
+const vmsSecretAccessKey = process.env.VMS_AWS_SECRET_ACCESS_KEY;
 const s3Client = new S3Client({
   region: AWS_REGION,
   maxAttempts: 5,
+  ...(vmsAccessKeyId && vmsSecretAccessKey
+    ? { credentials: { accessKeyId: vmsAccessKeyId, secretAccessKey: vmsSecretAccessKey } }
+    : {}),
 });
 
 // Cache for folder listings (10-minute TTL)
