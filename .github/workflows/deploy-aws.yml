@@ -1,0 +1,88 @@
+name: Deploy to AWS (kotty-track)
+
+# Phase 4 of the GCP->AWS migration: build/test/deploy to the staging ECS
+# service for dual-run verification. Deliberately scoped to the
+# `aws-migration` branch (NOT `main`) so this runs in parallel with the
+# existing GCP Cloud Build pipeline without any collision — main still
+# deploys to Cloud Run until the Phase 5/6 cutover, at which point this
+# trigger branch should be changed to `main` (and cloudbuild.yaml retired
+# per Phase 7 of the migration plan).
+on:
+  push:
+    branches: [aws-migration]
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write   # required for OIDC -> AWS role assumption
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: kotty-track
+  ECS_CLUSTER: kotty-track-cluster
+  ECS_SERVICE: kotty-track-service
+  ECS_TASK_FAMILY: kotty-track
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Backend tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: NODE_ENV=test npm test
+
+      - name: Frontend tests + build (Tasks + QC islands)
+        run: |
+          cd frontend
+          npm ci
+          npm run test
+          npm run build
+          npm run build:qc
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC, no stored keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::720712808547:role/kotty-track-github-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image (immutable SHA tag + latest)
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          docker build \
+            -t $REGISTRY/$ECR_REPOSITORY:${{ github.sha }} \
+            -t $REGISTRY/$ECR_REPOSITORY:latest \
+            .
+          docker push $REGISTRY/$ECR_REPOSITORY:${{ github.sha }}
+          docker push $REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: Render new task definition (pin the immutable SHA tag)
+        id: render-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: aws/task-definition.json
+          container-name: kotty-track
+          image: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true

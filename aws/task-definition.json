@@ -1,0 +1,51 @@
+{
+  "family": "kotty-track",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::720712808547:role/kotty-track-ecs-execution-role",
+  "taskRoleArn": "arn:aws:iam::720712808547:role/kotty-track-ecs-task-role",
+  "containerDefinitions": [
+    {
+      "name": "kotty-track",
+      "image": "720712808547.dkr.ecr.ap-south-1.amazonaws.com/kotty-track:latest",
+      "essential": true,
+      "portMappings": [{ "containerPort": 8080, "protocol": "tcp" }],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 15
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/kotty-track",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "PORT", "value": "8080" },
+        { "name": "DB_HOST", "value": "kotty-track-mysql.c30mmkwm61us.ap-south-1.rds.amazonaws.com" },
+        { "name": "DB_PORT", "value": "3306" },
+        { "name": "DB_NAME", "value": "kotty_db" },
+        { "name": "DB_USER", "value": "admin" },
+        { "name": "AWS_REGION", "value": "ap-south-1" },
+        { "name": "S3_BUCKET_NAME", "value": "kotty-track-uploads-720712808547" },
+        { "name": "SERVICE_BASE_URL", "value": "http://kotty-track-alb-1717649752.ap-south-1.elb.amazonaws.com" },
+        { "name": "PM_PULL_ENABLED", "value": "0" },
+        { "name": "DISABLE_CRON", "value": "1" },
+        { "name": "NODE_OPTIONS", "value": "--max-old-space-size=1536" }
+      ],
+      "secrets": [
+        { "name": "DB_PASSWORD", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/db-password" },
+        { "name": "SESSION_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/session-secret" },
+        { "name": "PM_CRON_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/pm-cron-secret" }
+      ]
+    }
+  ]
+}
