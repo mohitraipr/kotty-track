@@ -9,12 +9,11 @@ const path = require('path');
 const XLSX = require('xlsx');
 const { pool } = require('../config/db');
 const {
-  bucket,
   BUCKET_NAME,
   getObject,
   createGCSStorage,
   streamToBuffer
-} = require('../utils/gcsClient');
+} = require('../utils/awsStorageClient');
 const {
   isAuthenticated,
   isCatalogUpload,

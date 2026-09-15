@@ -9,14 +9,13 @@ const multer = require('multer');
 const ExcelJS = require('exceljs');
 const archiver = require('archiver');
 const {
-  bucket,
   BUCKET_NAME,
   listObjects,
   putObject,
   getObject,
   getSignedUrl,
   createGCSStorage
-} = require('../utils/gcsClient');
+} = require('../utils/awsStorageClient');
 const { pool } = require('../config/db');
 const { isAuthenticated, isVendorFiles } = require('../middlewares/auth');
 
