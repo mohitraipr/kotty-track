@@ -42,9 +42,9 @@
         { "name": "NODE_OPTIONS", "value": "--max-old-space-size=1536" }
       ],
       "secrets": [
-        { "name": "DB_PASSWORD", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/db-password" },
-        { "name": "SESSION_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/session-secret" },
-        { "name": "PM_CRON_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/pm-cron-secret" }
+        { "name": "DB_PASSWORD", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/db-password-A6UYSc" },
+        { "name": "SESSION_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/session-secret-nCdHgW" },
+        { "name": "PM_CRON_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-south-1:720712808547:secret:kotty-track/pm-cron-secret-Waj2Lp" }
       ]
     }
   ]
