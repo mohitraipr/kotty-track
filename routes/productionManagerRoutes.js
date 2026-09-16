@@ -23,7 +23,7 @@ const { cutPrioritySummary, fabricNeededByType, wipByStage } = require('../utils
 const { computeStyleTrend } = require('../utils/styleTrend');
 const { buildPicSizeRows, writePicSizeCsv, deriveLotStyle } = require('../utils/picSizeReport');
 const { createOrReuseJob, getJob, fireSelfCall } = require('../utils/picReportJobs');
-const gcs = require('../utils/gcsClient');
+const gcs = require('../utils/awsStorageClient');
 let pullWorker = null;
 try { pullWorker = require('../utils/easyecomPullWorker'); } catch (_) { pullWorker = null; }
 

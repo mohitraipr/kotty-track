@@ -8,14 +8,29 @@ const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated, hasRole } = require('../middlewares/auth');
 const multer = require('multer');
-const { Storage } = require('@google-cloud/storage');
 const path = require('path');
 const ExcelJS = require('exceljs');
 const { getReturnsList, getAllReturns } = require('../utils/easyecomReturnsClient');
+const s3 = require('../utils/awsStorageClient');
 
-// GCS setup for image uploads
-const storage = new Storage();
-const bucketName = process.env.GCS_BUCKET || 'kotty-uploads';
+// Images live in the app's S3 bucket, which (correctly) blocks public access, so
+// image_url now stores the OBJECT KEY rather than a public URL. Reads presign it
+// on the way out. Rows written before the AWS migration still hold full
+// https://storage.googleapis.com/... URLs; those are passed through untouched.
+function isLegacyPublicUrl(v) {
+  return typeof v === 'string' && /^https?:\/\//i.test(v);
+}
+
+async function toViewableUrl(stored) {
+  if (!stored) return null;
+  if (isLegacyPublicUrl(stored)) return stored;
+  try {
+    return await s3.getSignedUrl(stored, { expiresIn: 3600 });
+  } catch (err) {
+    console.error('Failed to presign GRN image:', err.message);
+    return null;
+  }
+}
 
 // Multer for file uploads
 const upload = multer({
@@ -99,6 +114,11 @@ router.get('/scan', isAuthenticated, allowGrnAccess, async (req, res) => {
       [userId, today]
     );
 
+    // image_url holds an S3 key post-migration — presign it so <img src> works.
+    for (const s of recentScans) {
+      s.image_url = await toViewableUrl(s.image_url);
+    }
+
     res.render('returnGrnScan', {
       user: req.session.user,
       recentScans,
@@ -140,19 +160,12 @@ router.post('/scan', isAuthenticated, allowGrnAccess, upload.single('image'), as
       });
     }
 
-    // Upload image to GCS if provided
+    // Upload image to S3 if provided; store the key (presigned on read)
     let imageUrl = null;
     if (req.file && status === 'bad') {
       const fileName = `return-grn/${getISTDate()}/${trimmedAwb}-${Date.now()}${path.extname(req.file.originalname)}`;
-      const bucket = storage.bucket(bucketName);
-      const blob = bucket.file(fileName);
-
-      await blob.save(req.file.buffer, {
-        contentType: req.file.mimetype,
-        metadata: { cacheControl: 'public, max-age=31536000' }
-      });
-
-      imageUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+      await s3.putObject(fileName, req.file.buffer, { contentType: req.file.mimetype });
+      imageUrl = fileName;
     }
 
     // Insert scan record
@@ -184,7 +197,7 @@ router.post('/scan', isAuthenticated, allowGrnAccess, upload.single('image'), as
         awb: trimmedAwb,
         status: status || 'good',
         scanned_at: scannedAt,
-        image_url: imageUrl
+        image_url: await toViewableUrl(imageUrl)
       },
       counts: counts[0]
     });
@@ -222,15 +235,8 @@ router.put('/scan/:id', isAuthenticated, allowGrnAccess, upload.single('image'),
     let imageUrl = scan[0].image_url;
     if (req.file && status === 'bad') {
       const fileName = `return-grn/${getISTDate()}/${scan[0].awb}-${Date.now()}${path.extname(req.file.originalname)}`;
-      const bucket = storage.bucket(bucketName);
-      const blob = bucket.file(fileName);
-
-      await blob.save(req.file.buffer, {
-        contentType: req.file.mimetype,
-        metadata: { cacheControl: 'public, max-age=31536000' }
-      });
-
-      imageUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+      await s3.putObject(fileName, req.file.buffer, { contentType: req.file.mimetype });
+      imageUrl = fileName;
     }
 
     await pool.query(
@@ -356,6 +362,9 @@ router.get('/data', isAuthenticated, allowOperatorAccess, async (req, res) => {
     query += ' ORDER BY scanned_at DESC LIMIT 1000';
 
     const [scans] = await pool.query(query, params);
+    for (const s of scans) {
+      s.image_url = await toViewableUrl(s.image_url);
+    }
 
     res.json({ success: true, data: scans });
   } catch (error) {

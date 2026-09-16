@@ -990,7 +990,7 @@ const {
   istDateString,
 } = require("../utils/picSizeReport");
 const { createOrReuseJob, getJob, fireSelfCall } = require("../utils/picReportJobs");
-const gcs = require("../utils/gcsClient");
+const gcs = require("../utils/awsStorageClient");
 
 
 /** The final PIC Report route */

@@ -18,7 +18,7 @@
 
 const { pool } = require('../config/db');
 const { fnv1a, buildPicSizeRows, writePicSizeCsv } = require('./picSizeReport');
-const gcs = require('./gcsClient');
+const gcs = require('./awsStorageClient');
 
 const JOB_TTL_DAYS = 3; // best-effort cleanup of old job rows + their GCS objects
 
