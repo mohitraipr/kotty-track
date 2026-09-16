@@ -1,9 +1,11 @@
 // Kotty Analyst — ask questions about production/sales/payments in plain language.
 // The model writes read-only SQL, runs it through a guarded tool, and explains the
-// result. Providers (both KEYLESS via the project's own Vertex AI — no API keys):
-//   1. Claude on Vertex (@anthropic-ai/vertex-sdk, global endpoint) — primary.
-//   2. Gemini on Vertex (@google/genai) — automatic fallback (e.g. while the
-//      Claude base-model quota request is pending, or on transient errors).
+// result. Providers (API-key based since the AWS migration — the previous
+// keyless Vertex AI setup relied on Cloud Run's GCP service-account credentials,
+// which do not exist on ECS):
+//   1. Claude via the direct Anthropic API (ANTHROPIC_API_KEY) — primary.
+//   2. Gemini via the Generative Language API (GEMINI_API_KEY) — automatic
+//      fallback on transient errors / quota.
 //
 // Safety layers (any one alone would hold):
 //   - dedicated pool with SET SESSION transaction_read_only = 1 (never the shared
@@ -13,7 +15,7 @@
 //   - every conversation persisted to ai_chats/ai_chat_messages (audit trail)
 
 const mysql = require('mysql2/promise');
-const { AnthropicVertex } = require('@anthropic-ai/vertex-sdk');
+const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenAI } = require('@google/genai');
 const { connectionConfig } = require('../config/db');
 const { guardSql, capRows } = require('./aiSql');
@@ -108,11 +110,16 @@ const SQL_TOOL_DEF = {
   },
 };
 
-// ── Claude on Vertex ──────────────────────────────────────────────────────
+// ── Claude (direct Anthropic API) ─────────────────────────────────────────
+// Was AnthropicVertex, which authenticated keylessly off the Cloud Run service
+// account's GCP credentials. On ECS there are no GCP credentials at all, so it
+// couldn't work post-migration regardless of the billing state. Uses
+// ANTHROPIC_API_KEY (Secrets Manager) instead, which also decouples the feature
+// from any cloud project's billing.
 let claudeClient = null;
 function getClaude() {
   if (!claudeClient) {
-    claudeClient = new AnthropicVertex({ projectId: GCP_PROJECT, region: CLAUDE_REGION });
+    claudeClient = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   }
   return claudeClient;
 }
@@ -160,10 +167,12 @@ async function askClaude(history, question, steps, deadline) {
 }
 
 // ── Gemini on Vertex ──────────────────────────────────────────────────────
+// Gemini via the public Generative Language API (AI Studio key) rather than
+// Vertex, for the same reason as Claude above — no GCP credentials on ECS.
 let geminiClient = null;
 function getGemini() {
   if (!geminiClient) {
-    geminiClient = new GoogleGenAI({ vertexai: true, project: GCP_PROJECT, location: GEMINI_REGION });
+    geminiClient = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
   }
   return geminiClient;
 }
