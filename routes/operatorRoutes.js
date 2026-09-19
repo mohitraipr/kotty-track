@@ -1314,7 +1314,7 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
         "Content-Disposition",
         'attachment; filename="PICReport-BySize.csv"'
       );
-      writePicSizeCsv(res, finalData);
+      await writePicSizeCsv(res, finalData);
     } else {
       return res.render("operatorSizeReport", {
         user: req.session.user,

@@ -35,6 +35,12 @@ function fnv1a(str) {
 // per-batch cache below a real chance at hits across overlapping requests,
 // where hashing the whole varying list almost never did.
 const LOT_CHUNK_SIZE = 500;
+
+// How many rows to process between event-loop yields in the CPU-bound row
+// enrichment and CSV serialisation loops. Small enough that /health and the
+// report-status polls stay responsive; large enough that the yields themselves
+// cost nothing measurable.
+const YIELD_EVERY_ROWS = 500;
 function chunkLotNos(lotNos, size = LOT_CHUNK_SIZE) {
   if (lotNos.length <= size) return [lotNos];
   const chunks = [];
@@ -1277,7 +1283,19 @@ async function buildPicSizeRows({
   }
 
   const finalData = [];
+  // Yield to the event loop periodically. This loop is pure CPU (buildEnhancedRow
+  // does 15+ toLocaleString() calls per row) over up to `rowLimit` rows, so on a
+  // wide date range it used to block Node for minutes. That starved /health, and
+  // since both the ALB target group and the container healthCheck fail after
+  // ~90s (interval 30s x 3), ECS killed the task mid-report — which is what
+  // surfaced to users as "Lost track of the report job" when the status poll
+  // hit the dying target. Yielding keeps the server answering between chunks.
+  let sinceYield = 0;
   for (const row of rows) {
+    if (++sinceYield >= YIELD_EVERY_ROWS) {
+      sinceYield = 0;
+      await new Promise((resolve) => setImmediate(resolve));
+    }
     // Exact style scope: the SQL LIKE prefilter can over-match (e.g. KTT677 vs KTT6770),
     // so confirm the derived style equals the requested one — same semantics as the
     // dashboard's r.style === style filtering. deriveLotStyle (not deriveStyle) so
@@ -1438,7 +1456,7 @@ function csvField(v) {
 // exceljs (which allocates a styled cell object per cell) and lets bytes
 // start flowing to the client immediately instead of only after every row
 // has been formatted.
-function writePicSizeCsv(res, finalData) {
+async function writePicSizeCsv(res, finalData) {
   const cols = getPicSizeReportColumns();
   // UTF-8 BOM: Excel doesn't auto-detect UTF-8 for a BOM-less .csv and falls back
   // to the system ANSI code page, garbling every non-ASCII byte — including the
@@ -1446,7 +1464,14 @@ function writePicSizeCsv(res, finalData) {
   // non-applicable stage columns), so this showed up on nearly every row.
   res.write('﻿');
   res.write(cols.map((c) => csvField(c.header)).join(',') + '\r\n');
+  // Yields for the same reason as the enrichment loop above — serialising tens
+  // of thousands of rows is enough CPU to trip the health checks on its own.
+  let sinceYield = 0;
   for (const r of finalData) {
+    if (++sinceYield >= YIELD_EVERY_ROWS) {
+      sinceYield = 0;
+      await new Promise((resolve) => setImmediate(resolve));
+    }
     res.write(cols.map((c) => csvField(r[c.key])).join(',') + '\r\n');
   }
   res.end();

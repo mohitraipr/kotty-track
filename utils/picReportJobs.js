@@ -20,7 +20,10 @@ const { pool } = require('../config/db');
 const { fnv1a, buildPicSizeRows, writePicSizeCsv } = require('./picSizeReport');
 const gcs = require('./awsStorageClient');
 
-const JOB_TTL_DAYS = 3; // best-effort cleanup of old job rows + their GCS objects
+const JOB_TTL_DAYS = 3; // best-effort cleanup of old job rows + their stored objects
+// A 'running' job older than this has lost its worker (e.g. ECS replaced the
+// task mid-report) and must not be reused — see createOrReuseJob below.
+const STALE_RUNNING_MIN = 10;
 
 function envv(name) {
   return process.env[name] || (global.env && global.env[name]) || undefined;
@@ -36,13 +39,34 @@ function paramsHash(params) {
 async function createOrReuseJob({ reportType, params, userId }) {
   const hash = paramsHash(params);
   const [existing] = await pool.query(
-    `SELECT id, status FROM pic_report_jobs
+    `SELECT id, status, started_at FROM pic_report_jobs
       WHERE report_type = ? AND params_hash = ? AND status IN ('queued','running')
         AND created_at > (NOW() - INTERVAL 30 MINUTE)
+        AND (
+          status = 'queued'
+          OR started_at IS NULL
+          OR started_at > (NOW() - INTERVAL ? MINUTE)
+        )
       ORDER BY created_at DESC LIMIT 1`,
-    [reportType, hash]
+    [reportType, hash, STALE_RUNNING_MIN]
   );
   if (existing.length) return { id: existing[0].id, reused: true };
+
+  // Anything still 'running' past STALE_RUNNING_MIN owns a task that is gone —
+  // an ECS replacement mid-report leaves the row 'running' forever. Without this
+  // the 30-minute reuse window above would keep handing every retry the same
+  // dead job id, so one crash poisoned the report for half an hour. Bury them
+  // so the insert below creates a genuinely fresh job. (Same reasoning as
+  // STALE_CLAIM_MIN in utils/catchupPull.js.)
+  await pool.query(
+    `UPDATE pic_report_jobs
+        SET status='failed', finished_at=NOW(),
+            message='abandoned — worker died before finishing'
+      WHERE report_type = ? AND params_hash = ? AND status = 'running'
+        AND started_at IS NOT NULL
+        AND started_at <= (NOW() - INTERVAL ? MINUTE)`,
+    [reportType, hash, STALE_RUNNING_MIN]
+  ).catch((e) => console.error('[picReportJobs] stale sweep failed:', e.message));
 
   const [result] = await pool.query(
     `INSERT INTO pic_report_jobs (report_type, params_hash, params_json, requested_by, status)
@@ -112,7 +136,7 @@ async function processJob(jobId) {
 
     const chunks = [];
     const fakeRes = { write: (s) => chunks.push(s), end: () => {} };
-    writePicSizeCsv(fakeRes, rows);
+    await writePicSizeCsv(fakeRes, rows);
     const csvBuffer = Buffer.from(chunks.join(''), 'utf8');
 
     const safeStyle = params.style ? params.style.replace(/[^A-Za-z0-9._-]/g, '_') : '';

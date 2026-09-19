@@ -205,7 +205,7 @@ router.get('/reports/pic-size', async (req, res) => {
     const safeStyle = (style || 'AllStyles').replace(/[^A-Za-z0-9._-]/g, '_');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="PICReport-InProduction-${safeStyle}-BySize.csv"`);
-    writePicSizeCsv(res, rows);
+    await writePicSizeCsv(res, rows);
   } catch (err) {
     console.error('[pm] /reports/pic-size failed:', err);
     res.status(500).send('Failed to build in-production report');
