@@ -88,6 +88,7 @@ function getDashboardForRole(roleName) {
     'production_manager': '/pm',
     'jitrgp': '/qc/dashboard',
     'lotviewers': '/lot-view',
+    'tech': '/tech',
   };
 
   // If role not found, log it for debugging and return a safe default

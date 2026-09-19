@@ -61,6 +61,7 @@ const ROLE_META = {
   returns_operator:     { label: 'Returns Operator',       icon: 'arrow-counterclockwise', desc: 'Returns dashboard' },
   inventory_operator:   { label: 'Out-of-Stock',           icon: 'bag-x',          desc: 'OOS market view' },
   outofstock:           { label: 'Out-of-Stock',           icon: 'bag-x',          desc: 'OOS market view' },
+  tech:                 { label: 'Tech',                   icon: 'terminal-fill',  desc: 'URL directory & route diagnostics' },
 };
 
 function titleCase(s) {
@@ -156,4 +157,8 @@ router.post('/switch-role', isAuthenticated, async (req, res) => {
   }
 });
 
+// Exported so /tech can reconcile the launcher cards against the landing-URL
+// map and the live router stack — the three are otherwise unconnected.
+router.ROLE_META = ROLE_META;
 module.exports = router;
+module.exports.ROLE_META = ROLE_META;

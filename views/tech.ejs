@@ -1,0 +1,153 @@
+<%- include('partials/header', { pageTitle: 'URL Directory' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/tech' }) %>
+
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: var(--content-max-width); margin: 0 auto;">
+
+    <div class="page-header">
+      <h1 class="page-title">URL Directory</h1>
+      <p class="page-subtitle">
+        Every route this app serves, read live from the router stack —
+        <strong><%= totals.routes %></strong> routes across
+        <strong><%= totals.prefixes %></strong> prefixes,
+        <strong><%= totals.roles %></strong> roles.
+      </p>
+    </div>
+
+    <%
+      // Roles are defined in three unconnected places (roles table, the landing
+      // URL map, the launcher card map). Anything below is a drift between them.
+      const issues = report.orphan.length + report.deadUrl.length
+                   + report.missingCard.length + report.missingUrl.length;
+    %>
+
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5 class="card-title">
+          <i class="bi bi-<%= issues ? 'exclamation-triangle' : 'check2-circle' %> me-2"></i>
+          Role / dashboard reconciliation
+        </h5>
+        <span class="badge <%= issues ? 'badge-warning' : 'badge-success' %>">
+          <%= issues %> issue<%= issues === 1 ? '' : 's' %>
+        </span>
+      </div>
+      <div class="card-body">
+        <% if (!issues) { %>
+          <p class="text-muted mb-0">Every role has a landing URL, a launcher card, and a route that actually serves it.</p>
+        <% } %>
+
+        <% if (report.orphan.length) { %>
+          <h6 class="text-danger">Nothing built against this role <span class="text-muted">(no dashboard and no launcher card — granting it to a user leaves them on /operator/hub)</span></h6>
+          <ul>
+            <% report.orphan.forEach(function (r) { %>
+              <li><code><%= r.role %></code></li>
+            <% }); %>
+          </ul>
+        <% } %>
+
+        <% if (report.deadUrl.length) { %>
+          <h6 class="text-danger">Landing URL serves no route <span class="text-muted">(user lands on a 404 — the dashboard was never built or has been removed)</span></h6>
+          <ul>
+            <% report.deadUrl.forEach(function (r) { %>
+              <li><code><%= r.role %></code> &rarr; <code><%= r.url %></code></li>
+            <% }); %>
+          </ul>
+        <% } %>
+
+        <% if (report.missingCard.length) { %>
+          <h6 class="text-warning">Has a landing URL but no launcher card <span class="text-muted">(card renders with an undefined label and icon)</span></h6>
+          <ul>
+            <% report.missingCard.forEach(function (r) { %>
+              <li><code><%= r.role %></code> &rarr; <code><%= r.url %></code></li>
+            <% }); %>
+          </ul>
+        <% } %>
+
+        <% if (report.missingUrl.length) { %>
+          <h6 class="text-warning">Has a launcher card but no landing URL <span class="text-muted">(silently falls back to /operator/hub, which the user usually cannot access)</span></h6>
+          <ul>
+            <% report.missingUrl.forEach(function (r) { %>
+              <li><code><%= r.role %></code></li>
+            <% }); %>
+          </ul>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><h5 class="card-title"><i class="bi bi-people me-2"></i>Roles</h5></div>
+      <div class="table-responsive">
+        <table class="table table-sm" style="font-size: var(--text-xs);">
+          <thead><tr><th>Role</th><th>Landing URL</th><th>Route exists</th><th>Launcher card</th></tr></thead>
+          <tbody>
+            <% report.roles.forEach(function (r) { %>
+              <tr>
+                <td><strong><%= r.role %></strong></td>
+                <td><% if (r.mapped) { %><code><%= r.url %></code><% } else { %><span class="text-muted">— none —</span><% } %></td>
+                <td><% if (!r.mapped) { %><span class="text-muted">—</span>
+                    <% } else if (r.live) { %><span class="badge badge-success">yes</span>
+                    <% } else { %><span class="badge badge-danger">no</span><% } %></td>
+                <td><% if (r.card) { %><span class="badge badge-success">yes</span>
+                    <% } else { %><span class="badge badge-warning">missing</span><% } %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title"><i class="bi bi-diagram-3 me-2"></i>Routes</h5>
+        <input id="filterBox" class="form-control form-input" style="max-width: 320px;"
+               placeholder="Filter by path or method…" oninput="filterRoutes()">
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm" style="font-size: var(--text-xs);">
+          <thead><tr><th style="width:140px;">Method</th><th>Path</th></tr></thead>
+          <tbody id="routeBody">
+            <% groups.forEach(function (g) { %>
+              <tr class="group-row" data-prefix="<%= g[0] %>">
+                <td colspan="2" style="background: var(--gray-100); font-weight: 600;">
+                  <%= g[0] %> <span class="text-muted">(<%= g[1].length %>)</span>
+                </td>
+              </tr>
+              <% g[1].forEach(function (r) { %>
+                <tr class="route-row" data-search="<%= (r.methods.join(' ') + ' ' + r.path).toLowerCase() %>">
+                  <td><% r.methods.forEach(function (m) { %><span class="badge badge-neutral"><%= m %></span> <% }); %></td>
+                  <td><code><%= r.path %></code></td>
+                </tr>
+              <% }); %>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer text-muted">
+        Read live from the Express router stack on each request — it cannot go stale.
+        Machine-readable copy at <code>/tech/routes.json</code>.
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+  function filterRoutes() {
+    const q = document.getElementById('filterBox').value.trim().toLowerCase();
+    // Hide a group heading when the filter leaves it with nothing under it.
+    let current = null, shown = 0;
+    for (const row of document.querySelectorAll('#routeBody tr')) {
+      if (row.classList.contains('group-row')) {
+        if (current) current.hidden = shown === 0;
+        current = row; shown = 0;
+        continue;
+      }
+      const match = !q || (row.dataset.search || '').includes(q);
+      row.hidden = !match;
+      if (match) shown++;
+    }
+    if (current) current.hidden = shown === 0;
+  }
+</script>
+
+<%- include('partials/footer') %>

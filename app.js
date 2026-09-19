@@ -377,6 +377,11 @@ app.use('/challandashboard', challanDashboardRoutes);
 const productLinksRoutes = require('./routes/productLinksRoutes');
 app.use('/product-links', productLinksRoutes);
 
+// Tech role: URL directory + route/role diagnostics. Mounted after every other
+// route module on purpose — it enumerates app._router.stack, so anything
+// mounted below this point would be missing from the directory it renders.
+app.use('/tech', require('./routes/techRoutes'));
+
 app.get('/test', (req, res) => {
     res.send(`
         <!DOCTYPE html>
